@@ -1,0 +1,74 @@
+[
+  {
+    "id": 0,
+    "date": "19-10-2025",
+    "description": "Grocery",
+    "amount": 0.0,
+    "paidBy": "Ashwaq",
+    "shares": {
+      "Hamza": 0.0,
+      "Zumair": 0.0,
+      "Faisal": 0.0
+    }
+  },
+  {
+    "id": 1,
+    "date": "To",
+    "description": "Grocery",
+    "amount": 0.0,
+    "paidBy": "Rizwan",
+    "shares": {
+      "Hamza": 0.0,
+      "Zumair": 0.0,
+      "Faisal": 0.0
+    }
+  },
+  {
+    "id": 2,
+    "date": "21-11-2025",
+    "description": "Grocery",
+    "amount": 0.0,
+    "paidBy": "Zumair",
+    "shares": {
+      "Hamza": 0.0,
+      "Zumair": 0.0,
+      "Faisal": 0.0
+    }
+  },
+  {
+    "id": 3,
+    "date": "",
+    "description": "Grocery",
+    "amount": 0.0,
+    "paidBy": "Faisal",
+    "shares": {
+      "Hamza": 0.0,
+      "Zumair": 0.0,
+      "Faisal": 0.0
+    }
+  },
+  {
+    "id": 4,
+    "date": "",
+    "description": "Grocery",
+    "amount": 0.0,
+    "paidBy": "Ateeq",
+    "shares": {
+      "Hamza": 0.0,
+      "Zumair": 0.0,
+      "Faisal": 0.0
+    }
+  },
+  {
+    "id": 5,
+    "date": "",
+    "description": "Grocery",
+    "amount": 0.0,
+    "paidBy": "Saif",
+    "shares": {
+      "Hamza": 0.0,
+      "Zumair": 0.0,
+      "Faisal": 0.0
+    }
+  }
+]

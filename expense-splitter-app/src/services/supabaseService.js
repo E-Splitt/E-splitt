@@ -1,0 +1,183 @@
+import { supabase } from '../supabase';
+
+// Table name
+const GROUPS_TABLE = 'groups';
+
+// --- Group Operations ---
+
+// Create a new group
+export const createGroupInSupabase = async (groupData) => {
+    try {
+        // Generate a random ID for the group (simple timestamp-based or random string)
+        const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const newGroup = {
+            ...groupData,
+            id: groupId,
+            createdAt: new Date().toISOString()
+        };
+
+        const { error } = await supabase
+            .from(GROUPS_TABLE)
+            .insert([
+                { group_id: groupId, data: newGroup }
+            ]);
+
+        if (error) throw error;
+        return newGroup;
+    } catch (error) {
+        console.error("Error creating group:", error);
+        throw error;
+    }
+};
+
+// Update an existing group
+export const updateGroupInSupabase = async (groupId, partialData) => {
+    try {
+        // First, get the current data to merge
+        const { data: currentRows, error: fetchError } = await supabase
+            .from(GROUPS_TABLE)
+            .select('data')
+            .eq('group_id', groupId)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        const currentData = currentRows.data;
+        const updatedData = { ...currentData, ...partialData };
+
+        const { error } = await supabase
+            .from(GROUPS_TABLE)
+            .update({ data: updatedData })
+            .eq('group_id', groupId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error("Error updating group:", error);
+        throw error;
+    }
+};
+
+// Delete a group
+export const deleteGroupInSupabase = async (groupId) => {
+    try {
+        const { error } = await supabase
+            .from(GROUPS_TABLE)
+            .delete()
+            .eq('group_id', groupId);
+
+        if (error) throw error;
+    } catch (error) {
+        console.error("Error deleting group:", error);
+        throw error;
+    }
+};
+
+// --- Real-time Listeners ---
+
+// Listen to all groups
+export const subscribeToGroups = (callback) => {
+    // 1. Fetch initial data
+    supabase
+        .from(GROUPS_TABLE)
+        .select('*')
+        .then(({ data, error }) => {
+            if (!error && data) {
+                const groups = data.map(row => row.data);
+                callback(groups);
+            }
+        });
+
+    // 2. Subscribe to changes
+    const channel = supabase
+        .channel('public:groups')
+        .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, (payload) => {
+            // Re-fetch all groups to ensure consistency (simplest approach for now)
+            // In a more optimized app, we'd merge the change locally.
+            supabase
+                .from(GROUPS_TABLE)
+                .select('*')
+                .then(({ data, error }) => {
+                    if (!error && data) {
+                        const groups = data.map(row => row.data);
+                        callback(groups);
+                    }
+                });
+        })
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+};
+
+// Listen to a specific group's data
+export const subscribeToGroupData = (groupId, callback) => {
+    if (!groupId) return () => { };
+
+    // 1. Fetch initial data
+    supabase
+        .from(GROUPS_TABLE)
+        .select('data')
+        .eq('group_id', groupId)
+        .single()
+        .then(({ data, error }) => {
+            if (!error && data) {
+                callback(data.data);
+            } else {
+                callback(null);
+            }
+        });
+
+    // 2. Subscribe to changes for this specific row
+    const channel = supabase
+        .channel(`group:${groupId}`)
+        .on('postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: GROUPS_TABLE,
+                filter: `group_id=eq.${groupId}`
+            },
+            (payload) => {
+                if (payload.eventType === 'DELETE') {
+                    callback(null);
+                } else {
+                    // payload.new has the new row data
+                    callback(payload.new.data);
+                }
+            }
+        )
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+};
+
+// --- Import/Export ---
+
+export const importGroupToSupabase = async (groupData) => {
+    try {
+        const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const newGroup = {
+            ...groupData,
+            id: groupId,
+            name: `${groupData.name} (Imported)`,
+            importedAt: new Date().toISOString()
+        };
+
+        const { error } = await supabase
+            .from(GROUPS_TABLE)
+            .insert([
+                { group_id: groupId, data: newGroup }
+            ]);
+
+        if (error) throw error;
+        return newGroup;
+    } catch (error) {
+        console.error("Error importing group:", error);
+        throw error;
+    }
+};

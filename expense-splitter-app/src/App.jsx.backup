@@ -1,0 +1,432 @@
+import React, { useState, useEffect } from 'react';
+import { Plus, Receipt, Users as UsersIcon, TrendingUp } from 'lucide-react';
+import Dashboard from './components/Dashboard';
+import ExpenseList from './components/ExpenseList';
+import AddExpenseModal from './components/AddExpenseModal';
+import SettleUp from './components/SettleUp';
+import SettleUpModal from './components/SettleUpModal';
+import ParticipantManager from './components/ParticipantManager';
+import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
+import initialData from './data/initialData.json';
+
+function App() {
+  const [expenses, setExpenses] = useState([]);
+  const [participants, setParticipants] = useState([]);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editExpense, setEditExpense] = useState(null);
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [settlePrefill, setSettlePrefill] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Load data from localStorage or initialize
+  useEffect(() => {
+    const storedExpenses = localStorage.getItem('expenses');
+    const storedParticipants = localStorage.getItem('participants');
+
+    if (storedParticipants) {
+      setParticipants(JSON.parse(storedParticipants));
+    } else {
+      // Extract unique participants from initial data
+      const uniqueUsers = new Set();
+      initialData.forEach(expense => {
+        if (expense.paidBy) uniqueUsers.add(expense.paidBy);
+        if (expense.shares) {
+          Object.keys(expense.shares).forEach(user => uniqueUsers.add(user));
+        }
+      });
+
+      const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#14b8a6', '#f97316'];
+      const initialParticipants = Array.from(uniqueUsers).map((name, index) => ({
+        id: `user_${name.toLowerCase().replace(/\s+/g, '_')}`,
+        name,
+        color: colors[index % colors.length]
+      }));
+
+      setParticipants(initialParticipants);
+    }
+
+    if (storedExpenses) {
+      setExpenses(JSON.parse(storedExpenses));
+    } else {
+      // Convert initial data to use participant IDs
+      const nameToId = {};
+      const uniqueUsers = new Set();
+
+      initialData.forEach(expense => {
+        if (expense.paidBy) uniqueUsers.add(expense.paidBy);
+        if (expense.shares) {
+          Object.keys(expense.shares).forEach(user => uniqueUsers.add(user));
+        }
+      });
+
+      Array.from(uniqueUsers).forEach(name => {
+        nameToId[name] = `user_${name.toLowerCase().replace(/\s+/g, '_')}`;
+      });
+
+      const convertedExpenses = initialData.map(expense => ({
+        ...expense,
+        paidBy: nameToId[expense.paidBy] || expense.paidBy,
+        shares: expense.shares ? Object.entries(expense.shares).reduce((acc, [name, amount]) => {
+          acc[nameToId[name] || name] = amount;
+          return acc;
+        }, {}) : {}
+      }));
+
+      setExpenses(convertedExpenses);
+    }
+  }, []);
+
+  // Save to localStorage whenever data changes
+  useEffect(() => {
+    if (expenses.length > 0) {
+      localStorage.setItem('expenses', JSON.stringify(expenses));
+    }
+  }, [expenses]);
+
+  useEffect(() => {
+    if (participants.length > 0) {
+      localStorage.setItem('participants', JSON.stringify(participants));
+    }
+  }, [participants]);
+
+  const handleAddExpense = (newExpense) => {
+    setExpenses(prev => [newExpense, ...prev]);
+  };
+
+  const handleEditExpense = (updatedExpense) => {
+    setExpenses(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+  };
+
+  const handleOpenEditExpense = (expense) => {
+    setEditExpense(expense);
+    setIsExpenseModalOpen(true);
+  };
+
+  const handleDeleteExpense = (expenseId) => {
+    if (confirm('Are you sure you want to delete this expense?')) {
+      setExpenses(prev => prev.filter(e => e.id !== expenseId));
+    }
+  };
+
+  const handleSettle = (settlement) => {
+    setExpenses(prev => [settlement, ...prev]);
+  };
+
+  const handleAddParticipant = (newParticipant) => {
+    setParticipants(prev => [...prev, newParticipant]);
+  };
+
+  const handleRemoveParticipant = (userId) => {
+    // Check if participant has any expenses
+    const hasExpenses = expenses.some(expense =>
+      expense.paidBy === userId ||
+      (expense.shares && expense.shares[userId] > 0)
+    );
+
+    if (hasExpenses) {
+      alert('Cannot remove participant with existing expenses. Delete their expenses first.');
+      return;
+    }
+
+    if (confirm('Are you sure you want to remove this participant?')) {
+      setParticipants(prev => prev.filter(p => p.id !== userId));
+    }
+  };
+
+  const handleOpenSettleModal = (prefill) => {
+    setSettlePrefill(prefill);
+    setIsSettleModalOpen(true);
+  };
+
+  const { balances, totalPaid, totalShare } = calculateBalances(expenses, participants);
+
+  // Get only participants who are actually involved in expenses
+  const activeParticipants = getActiveParticipants(expenses, participants);
+
+  const totalExpenses = expenses
+    .filter(e => !e.isSettlement)
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  // Calculate average based on ACTIVE participants only
+  const avgPerPerson = activeParticipants.length > 0 ? totalExpenses / activeParticipants.length : 0;
+
+  function App() {
+    const [expenses, setExpenses] = useState([]);
+    const [participants, setParticipants] = useState([]);
+    const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+    const [editExpense, setEditExpense] = useState(null);
+    const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+    const [settlePrefill, setSettlePrefill] = useState(null);
+    const [activeTab, setActiveTab] = useState('dashboard');
+
+    // Load data from localStorage or initialize
+    useEffect(() => {
+      const storedExpenses = localStorage.getItem('expenses');
+      const storedParticipants = localStorage.getItem('participants');
+
+      if (storedParticipants) {
+        setParticipants(JSON.parse(storedParticipants));
+      } else {
+        // Extract unique participants from initial data
+        const uniqueUsers = new Set();
+        initialData.forEach(expense => {
+          if (expense.paidBy) uniqueUsers.add(expense.paidBy);
+          if (expense.shares) {
+            Object.keys(expense.shares).forEach(user => uniqueUsers.add(user));
+          }
+        });
+
+        const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#14b8a6', '#f97316'];
+        const initialParticipants = Array.from(uniqueUsers).map((name, index) => ({
+          id: `user_${name.toLowerCase().replace(/\s+/g, '_')}`,
+          name,
+          color: colors[index % colors.length]
+        }));
+
+        setParticipants(initialParticipants);
+      }
+
+      if (storedExpenses) {
+        setExpenses(JSON.parse(storedExpenses));
+      } else {
+        // Convert initial data to use participant IDs
+        const nameToId = {};
+        const uniqueUsers = new Set();
+
+        initialData.forEach(expense => {
+          if (expense.paidBy) uniqueUsers.add(expense.paidBy);
+          if (expense.shares) {
+            Object.keys(expense.shares).forEach(user => uniqueUsers.add(user));
+          }
+        });
+
+        Array.from(uniqueUsers).forEach(name => {
+          nameToId[name] = `user_${name.toLowerCase().replace(/\s+/g, '_')}`;
+        });
+
+        const convertedExpenses = initialData.map(expense => ({
+          ...expense,
+          paidBy: nameToId[expense.paidBy] || expense.paidBy,
+          shares: expense.shares ? Object.entries(expense.shares).reduce((acc, [name, amount]) => {
+            acc[nameToId[name] || name] = amount;
+            return acc;
+          }, {}) : {}
+        }));
+
+        setExpenses(convertedExpenses);
+      }
+    }, []);
+
+    // Save to localStorage whenever data changes
+    useEffect(() => {
+      if (expenses.length > 0) {
+        localStorage.setItem('expenses', JSON.stringify(expenses));
+      }
+    }, [expenses]);
+
+    useEffect(() => {
+      if (participants.length > 0) {
+        localStorage.setItem('participants', JSON.stringify(participants));
+      }
+    }, [participants]);
+
+    const handleAddExpense = (newExpense) => {
+      setExpenses(prev => [newExpense, ...prev]);
+    };
+
+    const handleEditExpense = (updatedExpense) => {
+      setExpenses(prev => prev.map(e => e.id === updatedExpense.id ? updatedExpense : e));
+    };
+
+    const handleOpenEditExpense = (expense) => {
+      setEditExpense(expense);
+      setIsExpenseModalOpen(true);
+    };
+
+    const handleDeleteExpense = (expenseId) => {
+      if (confirm('Are you sure you want to delete this expense?')) {
+        setExpenses(prev => prev.filter(e => e.id !== expenseId));
+      }
+    };
+
+    const handleSettle = (settlement) => {
+      setExpenses(prev => [settlement, ...prev]);
+    };
+
+    const handleAddParticipant = (newParticipant) => {
+      setParticipants(prev => [...prev, newParticipant]);
+    };
+
+    const handleRemoveParticipant = (userId) => {
+      // Check if participant has any expenses
+      const hasExpenses = expenses.some(expense =>
+        expense.paidBy === userId ||
+        (expense.shares && expense.shares[userId] > 0)
+      );
+
+      if (hasExpenses) {
+        alert('Cannot remove participant with existing expenses. Delete their expenses first.');
+        return;
+      }
+
+      if (confirm('Are you sure you want to remove this participant?')) {
+        setParticipants(prev => prev.filter(p => p.id !== userId));
+      }
+    };
+
+    const handleOpenSettleModal = (prefill) => {
+      setSettlePrefill(prefill);
+      setIsSettleModalOpen(true);
+    };
+
+    const { balances, totalPaid, totalShare } = calculateBalances(expenses, participants);
+
+    const totalExpenses = expenses
+      .filter(e => !e.isSettlement)
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const avgPerPerson = participants.length > 0 ? totalExpenses / participants.length : 0;
+
+    return (
+      <div className="min-h-screen bg-gray-50 pb-12">
+        {/* Header */}
+        <header className="bg-white shadow-sm sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="h-16 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-2 rounded-lg text-white">
+                  <Receipt size={24} />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">SplitIt</h1>
+                  <p className="text-xs text-gray-500">Split expenses easily</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsExpenseModalOpen(true)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm"
+              >
+                <Plus size={20} />
+                <span className="hidden sm:inline">Add Expense</span>
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-4 border-t border-gray-200">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'dashboard'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                <div className="flex items-center gap-2">
+                  <TrendingUp size={16} />
+                  Dashboard
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('participants')}
+                className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'participants'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                <div className="flex items-center gap-2">
+                  <UsersIcon size={16} />
+                  Participants ({participants.length})
+                </div>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {activeTab === 'dashboard' && (
+            <>
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h2>
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-lg p-4 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-600">Total Expenses</div>
+                      <div className="text-2xl font-bold text-indigo-600">${totalExpenses.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Per Person (Avg)</div>
+                      <div className="text-2xl font-bold text-purple-600">${avgPerPerson.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600">Transactions</div>
+                      <div className="text-2xl font-bold text-gray-900">{expenses.filter(e => !e.isSettlement).length}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} />
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-8">
+                  <ExpenseList
+                    expenses={expenses}
+                    participants={participants}
+                    onDelete={handleDeleteExpense}
+                    onEdit={handleOpenEditExpense}
+                  />
+                </div>
+                <div className="lg:col-span-1">
+                  <div className="sticky top-24">
+                    <SettleUp
+                      balances={balances}
+                      participants={participants}
+                      onOpenSettleModal={handleOpenSettleModal}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'participants' && (
+            <div className="max-w-2xl">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Manage Participants</h2>
+                <p className="text-gray-600">Add or remove people from your group</p>
+              </div>
+              <ParticipantManager
+                participants={participants}
+                onAdd={handleAddParticipant}
+                onRemove={handleRemoveParticipant}
+              />
+            </div>
+          )}
+        </main>
+
+        <AddExpenseModal
+          isOpen={isExpenseModalOpen}
+          onClose={() => {
+            setIsExpenseModalOpen(false);
+            setEditExpense(null);
+          }}
+          onAdd={handleAddExpense}
+          onEdit={handleEditExpense}
+          participants={participants}
+          editExpense={editExpense}
+        />
+
+        <SettleUpModal
+          isOpen={isSettleModalOpen}
+          onClose={() => {
+            setIsSettleModalOpen(false);
+            setSettlePrefill(null);
+          }}
+          onSettle={handleSettle}
+          participants={participants}
+          prefill={settlePrefill}
+        />
+      </div>
+    );
+  }
+
+  export default App;
