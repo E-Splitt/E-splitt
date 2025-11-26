@@ -4,6 +4,7 @@
 Run the following command to create a production-ready build of your app:
 
 ```bash
+cd expense-splitter-app
 npm run build
 ```
 
