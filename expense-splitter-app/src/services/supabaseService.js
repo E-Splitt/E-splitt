@@ -16,9 +16,9 @@ const generateGroupId = () => {
 // --- Group Operations ---
 
 // Create a new group
-export const createGroupInSupabase = async (groupData) => {
+export const createGroupInSupabase = async (groupData, customId = null) => {
     try {
-        const groupId = generateGroupId();
+        const groupId = customId || generateGroupId();
 
         const newGroup = {
             ...groupData,

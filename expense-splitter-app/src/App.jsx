@@ -20,7 +20,6 @@ import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
 import { createActivity, formatActivityDescription, getActorName } from './utils/activityLogger';
 import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked, lockGroup, lockAllGroups } from './utils/crypto';
 import { requestNotificationPermission, notifyNewExpense, notifyPaymentRecorded, notifyExpenseEdited, notifyExpenseDeleted } from './utils/notifications';
-import initialData from './data/initialData.json';
 import {
   createGroupInSupabase,
   updateGroupInSupabase,
@@ -102,8 +101,57 @@ function App() {
   // Handle default group selection
   useEffect(() => {
     if (groups.length > 0 && !currentGroupId) {
-      // Always prefer selecting the first existing group
-      setCurrentGroupId(groups[0].id);
+      // Prefer "Welcome Group" (g_default001)
+      const defaultGroup = groups.find(g => g.id === 'g_default001');
+
+      if (defaultGroup) {
+        setCurrentGroupId(defaultGroup.id);
+      } else {
+        // If Welcome Group doesn't exist, create it!
+        const createWelcomeGroup = async () => {
+          try {
+            const newGroupData = {
+              name: 'Welcome Group',
+              participants: [],
+              expenses: [],
+              activityLog: [],
+              pinHash: null,
+              pinEnabled: false
+            };
+            // Pass custom ID 'g_default001'
+            await createGroupInSupabase(newGroupData, 'g_default001');
+            // Selection will happen on next render when groups update
+          } catch (e) {
+            console.error("Error creating default group:", e);
+            // Fallback to first available
+            setCurrentGroupId(groups[0].id);
+          }
+        };
+        createWelcomeGroup();
+      }
+    } else if (groups.length === 0 && !currentGroupId) {
+      // If absolutely no groups, create Welcome Group
+      const createWelcomeGroup = async () => {
+        try {
+          const newGroupData = {
+            name: 'Welcome Group',
+            participants: [],
+            expenses: [],
+            activityLog: [],
+            pinHash: null,
+            pinEnabled: false
+          };
+          await createGroupInSupabase(newGroupData, 'g_default001');
+        } catch (e) {
+          console.error("Error creating initial group:", e);
+        }
+      };
+      // Only try once to avoid loops
+      const hasInit = localStorage.getItem('hasInitWelcome');
+      if (!hasInit) {
+        createWelcomeGroup();
+        localStorage.setItem('hasInitWelcome', 'true');
+      }
     }
   }, [groups, currentGroupId]);
 
@@ -822,7 +870,7 @@ function App() {
         onSave={handleSaveProfile}
         initialProfile={userProfile}
       />
-    </div >
+    </div>
   );
 }
 
