@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Receipt, Users as UsersIcon, TrendingUp, Menu, X, Clock } from 'lucide-react';
+import { Plus, Receipt, Users as UsersIcon, TrendingUp, Menu, X, Clock, BarChart3, Moon, Sun, MessageSquare } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
 import AddExpenseModal from './components/AddExpenseModal';
 import SettleUp from './components/SettleUp';
 import SettleUpModal from './components/SettleUpModal';
+import Analytics from './components/Analytics';
 import ParticipantManager from './components/ParticipantManager';
 import QuickAddExpense from './components/QuickAddExpense';
 import GroupSelector from './components/GroupSelector';
 import ShareGroupModal from './components/ShareGroupModal';
 import ActivityLog from './components/ActivityLog';
 import PinModal from './components/PinModal';
+import DevDashboard from './components/DevDashboard';
+import UserProfileModal from './components/UserProfileModal';
+import Chat from './components/Chat';
 import ESplitLogo from './components/ESplitLogo';
 import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
 import { createActivity, formatActivityDescription, getActorName } from './utils/activityLogger';
 import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked, lockGroup, lockAllGroups } from './utils/crypto';
+import { requestNotificationPermission, notifyNewExpense, notifyPaymentRecorded, notifyExpenseEdited, notifyExpenseDeleted } from './utils/notifications';
 import initialData from './data/initialData.json';
 import {
   createGroupInSupabase,
@@ -22,7 +27,9 @@ import {
   deleteGroupInSupabase,
   subscribeToGroups,
   subscribeToGroupData,
-  importGroupToSupabase
+  importGroupToSupabase,
+  logDeviceAccess,
+  sendMessage
 } from './services/supabaseService';
 
 function App() {
@@ -43,6 +50,32 @@ function App() {
   const [pinModalMode, setPinModalMode] = useState('enter'); // 'enter' or 'set'
   const [pinModalGroupId, setPinModalGroupId] = useState(null);
   const [inactivityTimer, setInactivityTimer] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [chatMessages, setChatMessages] = useState([]);
+
+  // Dev Dashboard State
+  const [isDevModalOpen, setIsDevModalOpen] = useState(false);
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const [logoClickTimer, setLogoClickTimer] = useState(null);
+
+  // User Profile State
+  const [userProfile, setUserProfile] = useState(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  // Load user profile on mount
+  useEffect(() => {
+    const storedProfile = localStorage.getItem('userProfile');
+    if (storedProfile) {
+      setUserProfile(JSON.parse(storedProfile));
+    } else {
+      setIsProfileModalOpen(true);
+    }
+  }, []);
+
+  const handleSaveProfile = (profile) => {
+    setUserProfile(profile);
+    setIsProfileModalOpen(false);
+  };
 
   // Load groups from Firestore
   useEffect(() => {
@@ -53,18 +86,24 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // Log device access on load
+  useEffect(() => {
+    logDeviceAccess(currentGroupId);
+  }, [currentGroupId]);
+
+  // Request notification permission on load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      requestNotificationPermission();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Handle default group selection
   useEffect(() => {
     if (groups.length > 0 && !currentGroupId) {
-      // Only create default if we haven't already tried (to avoid loops)
-      const hasInitialized = localStorage.getItem('hasInitialized');
-      if (!hasInitialized) {
-        handleCreateGroup('My Group');
-        localStorage.setItem('hasInitialized', 'true');
-      } else {
-        // Select first group if none selected
-        setCurrentGroupId(groups[0].id);
-      }
+      // Always prefer selecting the first existing group
+      setCurrentGroupId(groups[0].id);
     }
   }, [groups, currentGroupId]);
 
@@ -79,6 +118,7 @@ function App() {
         setParticipants(groupData.participants || []);
         setExpenses(groupData.expenses || []);
         setActivityLog(groupData.activityLog || []);
+        setChatMessages(groupData.chatMessages || []);
       }
     });
 
@@ -130,6 +170,39 @@ function App() {
     };
   }, [groups]);
 
+  // Dark mode effect
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', darkMode.toString());
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
+  // Secret Dev Dashboard Trigger (5 clicks on logo)
+  const handleLogoClick = () => {
+    const newCount = logoClickCount + 1;
+    setLogoClickCount(newCount);
+
+    if (logoClickTimer) clearTimeout(logoClickTimer);
+
+    if (newCount >= 5) {
+      setIsDevModalOpen(true);
+      setLogoClickCount(0);
+    } else {
+      // Reset count if no click within 2 seconds
+      const timer = setTimeout(() => {
+        setLogoClickCount(0);
+      }, 2000);
+      setLogoClickTimer(timer);
+    }
+  };
+
   // --- Group Handlers --- // Save group data to Firestore
   const saveGroupData = async (updatedParticipants, updatedExpenses, newActivity = null) => {
     if (!currentGroupId) return;
@@ -170,6 +243,28 @@ function App() {
     } catch (error) {
       console.error("Error creating group:", error);
       alert("Failed to create group.");
+    }
+  };
+
+  const handleSendMessage = async (text) => {
+    if (!currentGroupId || !userProfile) return;
+
+    const message = {
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substr(2),
+      text,
+      userId: userProfile.id,
+      userName: userProfile.name,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      // Optimistic update (optional, but good for UX)
+      // setChatMessages([...chatMessages, message]); 
+      // Actually, let's rely on subscription for consistency
+
+      await sendMessage(currentGroupId, message);
+    } catch (error) {
+      alert("Failed to send message");
     }
   };
 
@@ -282,6 +377,7 @@ function App() {
     });
 
     saveGroupData(participants, updatedExpenses, activity);
+    notifyNewExpense(newExpense, participants);
   };
 
   const handleEditExpense = (updatedExpense) => {
@@ -297,6 +393,7 @@ function App() {
     });
 
     saveGroupData(participants, updatedExpenses, activity);
+    notifyExpenseEdited(updatedExpense, participants);
   };
 
   const handleDeleteExpense = (expenseId) => {
@@ -313,6 +410,7 @@ function App() {
       });
 
       saveGroupData(participants, updatedExpenses, activity);
+      notifyExpenseDeleted(deletedExpense, participants);
     }
   };
 
@@ -335,6 +433,7 @@ function App() {
     });
 
     saveGroupData(participants, updatedExpenses, activity);
+    notifyPaymentRecorded(settlement, participants);
   };
 
   const handleAddParticipant = (newParticipant) => {
@@ -427,14 +526,13 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
-      {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-gray-50 transition-colors">
+      <header className="bg-white shadow-sm sticky top-0 z-10 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Logo and App Name */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 cursor-pointer select-none" onClick={handleLogoClick}>
                 <ESplitLogo size={40} />
                 <div>
                   <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
@@ -468,7 +566,7 @@ function App() {
                 <Plus size={20} />
                 <span className="hidden md:inline">Add Expense</span>
               </button>
-            </div>
+            </div >
 
             {/* Mobile Menu Button */}
             <button
@@ -480,38 +578,40 @@ function App() {
           </div>
 
           {/* Mobile Menu */}
-          {isMobileMenuOpen && (
-            <div className="sm:hidden border-t border-gray-200 py-4 space-y-3">
-              <div className="pb-3 border-b border-gray-200">
-                <GroupSelector
-                  groups={groups}
-                  currentGroup={currentGroupId}
-                  onSelectGroup={handleSelectGroup}
-                  onCreateGroup={handleCreateGroup}
-                  onEditGroup={handleEditGroup}
-                  onDeleteGroup={handleDeleteGroup}
-                  onShareGroup={handleShareGroup}
-                  onSetPin={handleSetPin}
-                />
+          {
+            isMobileMenuOpen && (
+              <div className="sm:hidden border-t border-gray-200 py-4 space-y-3">
+                <div className="pb-3 border-b border-gray-200">
+                  <GroupSelector
+                    groups={groups}
+                    currentGroup={currentGroupId}
+                    onSelectGroup={handleSelectGroup}
+                    onCreateGroup={handleCreateGroup}
+                    onEditGroup={handleEditGroup}
+                    onDeleteGroup={handleDeleteGroup}
+                    onShareGroup={handleShareGroup}
+                    onSetPin={handleSetPin}
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    setIsExpenseModalOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus size={20} />
+                  Add Expense
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  setIsExpenseModalOpen(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus size={20} />
-                Add Expense
-              </button>
-            </div>
-          )}
+            )
+          }
 
           {/* Tabs */}
-          <div className="flex gap-4 border-t border-gray-200">
+          <div className="flex gap-4 border-t border-gray-200 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'dashboard'
+              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'dashboard'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
@@ -523,7 +623,7 @@ function App() {
             </button>
             <button
               onClick={() => setActiveTab('participants')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'participants'
+              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'participants'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
@@ -535,7 +635,7 @@ function App() {
             </button>
             <button
               onClick={() => setActiveTab('activity')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'activity'
+              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'activity'
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
@@ -543,6 +643,30 @@ function App() {
               <div className="flex items-center gap-2">
                 <Clock size={16} />
                 Activity
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'chat'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquare size={16} />
+                Chat
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'analytics'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <BarChart3 size={16} />
+                Analytics
               </div>
             </button>
           </div>
@@ -625,6 +749,27 @@ function App() {
             />
           </div>
         )}
+
+        {activeTab === 'chat' && (
+          <div className="max-w-4xl">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Group Chat</h2>
+              <p className="text-gray-600">Discuss expenses with your group</p>
+            </div>
+            <Chat
+              messages={chatMessages}
+              currentUser={userProfile}
+              onSendMessage={handleSendMessage}
+            />
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <Analytics
+            expenses={expenses}
+            participants={participants}
+          />
+        )}
       </main>
 
       <AddExpenseModal
@@ -666,7 +811,18 @@ function App() {
         mode={pinModalMode}
         groupName={groups.find(g => g.id === pinModalGroupId)?.name}
       />
-    </div>
+
+      <DevDashboard
+        isOpen={isDevModalOpen}
+        onClose={() => setIsDevModalOpen(false)}
+      />
+
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onSave={handleSaveProfile}
+        initialProfile={userProfile}
+      />
+    </div >
   );
 }
 

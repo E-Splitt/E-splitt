@@ -192,3 +192,77 @@ export const importGroupToSupabase = async (groupData) => {
         throw error;
     }
 };
+
+// --- Analytics/Logging ---
+
+export const logDeviceAccess = async (groupId = null) => {
+    try {
+        const { error } = await supabase
+            .from('app_logs')
+            .insert([
+                {
+                    user_agent: navigator.userAgent,
+                    screen_width: window.screen.width,
+                    screen_height: window.screen.height,
+                    language: navigator.language,
+                    platform: navigator.platform,
+                    group_id: groupId
+                }
+            ]);
+
+        if (error) {
+            // Silently fail for logs, don't disrupt user
+            console.warn("Error logging device:", error);
+        }
+    } catch (error) {
+        console.warn("Error logging device:", error);
+    }
+};
+
+export const fetchLogs = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('app_logs')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (error) throw error;
+        return data;
+    } catch (error) {
+        console.error("Error fetching logs:", error);
+        return [];
+    }
+};
+
+export const sendMessage = async (groupId, message) => {
+    try {
+        // 1. Get current group data
+        const { data: groupRow, error: fetchError } = await supabase
+            .from(GROUPS_TABLE)
+            .select('data')
+            .eq('group_id', groupId)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        const currentData = groupRow.data;
+        const currentMessages = currentData.chatMessages || [];
+
+        // 2. Append new message
+        const updatedMessages = [...currentMessages, message];
+
+        // 3. Update group
+        const { error: updateError } = await supabase
+            .from(GROUPS_TABLE)
+            .update({
+                data: { ...currentData, chatMessages: updatedMessages }
+            })
+            .eq('group_id', groupId);
+
+        if (updateError) throw updateError;
+    } catch (error) {
+        console.error("Error sending message:", error);
+        throw error;
+    }
+};
