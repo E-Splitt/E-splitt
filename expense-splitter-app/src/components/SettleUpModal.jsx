@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, DollarSign } from 'lucide-react';
 
 const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => {
-    const [from, setFrom] = useState(prefill?.from?.id || '');
-    const [to, setTo] = useState(prefill?.to?.id || '');
-    const [amount, setAmount] = useState(prefill?.amount || '');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [amount, setAmount] = useState('');
     const [note, setNote] = useState('');
+
+    // Update state when prefill changes
+    useEffect(() => {
+        if (prefill) {
+            setFrom(prefill.from?.id || '');
+            setTo(prefill.to?.id || '');
+            setAmount(prefill.amount?.toString() || '');
+        }
+    }, [prefill]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -48,8 +57,8 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-gray-800">Record Payment</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">

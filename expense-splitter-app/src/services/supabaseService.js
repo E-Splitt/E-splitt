@@ -3,18 +3,28 @@ import { supabase } from '../supabase';
 // Table name
 const GROUPS_TABLE = 'groups';
 
+// Generate secure random group ID
+const generateGroupId = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let id = 'g_';
+    for (let i = 0; i < 12; i++) {
+        id += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return id;
+};
+
 // --- Group Operations ---
 
 // Create a new group
 export const createGroupInSupabase = async (groupData) => {
     try {
-        // Generate a random ID for the group (simple timestamp-based or random string)
-        const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const groupId = generateGroupId();
 
         const newGroup = {
             ...groupData,
             id: groupId,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            activityLog: [] // Initialize activity log
         };
 
         const { error } = await supabase
@@ -159,13 +169,14 @@ export const subscribeToGroupData = (groupId, callback) => {
 
 export const importGroupToSupabase = async (groupData) => {
     try {
-        const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const groupId = generateGroupId();
 
         const newGroup = {
             ...groupData,
             id: groupId,
             name: `${groupData.name} (Imported)`,
-            importedAt: new Date().toISOString()
+            importedAt: new Date().toISOString(),
+            activityLog: groupData.activityLog || []
         };
 
         const { error } = await supabase

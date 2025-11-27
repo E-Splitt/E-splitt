@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Receipt, Users as UsersIcon, TrendingUp, Menu, X } from 'lucide-react';
+import { Plus, Receipt, Users as UsersIcon, TrendingUp, Menu, X, Clock } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
 import AddExpenseModal from './components/AddExpenseModal';
@@ -9,8 +9,12 @@ import ParticipantManager from './components/ParticipantManager';
 import QuickAddExpense from './components/QuickAddExpense';
 import GroupSelector from './components/GroupSelector';
 import ShareGroupModal from './components/ShareGroupModal';
+import ActivityLog from './components/ActivityLog';
+import PinModal from './components/PinModal';
 import ESplitLogo from './components/ESplitLogo';
 import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
+import { createActivity, formatActivityDescription, getActorName } from './utils/activityLogger';
+import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked, lockGroup, lockAllGroups } from './utils/crypto';
 import initialData from './data/initialData.json';
 import {
   createGroupInSupabase,
@@ -26,6 +30,7 @@ function App() {
   const [currentGroupId, setCurrentGroupId] = useState('');
   const [expenses, setExpenses] = useState([]);
   const [participants, setParticipants] = useState([]);
+  const [activityLog, setActivityLog] = useState([]);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editExpense, setEditExpense] = useState(null);
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
@@ -34,6 +39,10 @@ function App() {
   const [shareGroupData, setShareGroupData] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinModalMode, setPinModalMode] = useState('enter'); // 'enter' or 'set'
+  const [pinModalGroupId, setPinModalGroupId] = useState(null);
+  const [inactivityTimer, setInactivityTimer] = useState(null);
 
   // Load groups from Firestore
   useEffect(() => {
@@ -69,20 +78,71 @@ function App() {
       if (groupData) {
         setParticipants(groupData.participants || []);
         setExpenses(groupData.expenses || []);
+        setActivityLog(groupData.activityLog || []);
       }
     });
 
     return () => unsubscribe();
-  }, [currentGroupId]);
+  }, [currentGroupId, groups]);
 
-  // Helper to save current group data to Firestore
-  const saveGroupData = async (updatedParticipants, updatedExpenses) => {
+  // Auto-lock timer - lock all groups after 10 minutes of inactivity (security feature #4)
+  const AUTO_LOCK_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
+  const resetInactivityTimer = () => {
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+    }
+
+    const newTimer = setTimeout(() => {
+      // Lock all PIN-protected groups
+      const hasProtectedGroups = groups.some(g => g.pinEnabled);
+      if (hasProtectedGroups) {
+        lockAllGroups();
+        alert('Groups have been locked due to inactivity.');
+        // Optionally reload to show lock state
+        window.location.reload();
+      }
+    }, AUTO_LOCK_TIMEOUT);
+
+    setInactivityTimer(newTimer);
+  };
+
+  // Set up inactivity timer on mount and reset on any interaction
+  useEffect(() => {
+    resetInactivityTimer();
+
+    const handleActivity = () => {
+      resetInactivityTimer();
+    };
+
+    // Listen for user activity
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('click', handleActivity);
+
+    return () => {
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('click', handleActivity);
+    };
+  }, [groups]);
+
+  // --- Group Handlers --- // Save group data to Firestore
+  const saveGroupData = async (updatedParticipants, updatedExpenses, newActivity = null) => {
     if (!currentGroupId) return;
 
     try {
+      const updatedActivityLog = newActivity
+        ? [newActivity, ...activityLog] // Prepend new activity
+        : activityLog;
+
       await updateGroupInSupabase(currentGroupId, {
         participants: updatedParticipants,
-        expenses: updatedExpenses
+        expenses: updatedExpenses,
+        activityLog: updatedActivityLog
       });
     } catch (error) {
       console.error("Error saving group data:", error);
@@ -90,23 +150,50 @@ function App() {
     }
   };
 
-  const handleCreateGroup = async (groupName) => {
+  const handleCreateGroup = async (groupName, pin) => {
     try {
+      let pinHash = null;
+      if (pin && pin.length === 4) {
+        pinHash = await hashPin(pin);
+      }
+
       const newGroupData = {
         name: groupName,
         participants: [],
-        expenses: []
+        expenses: [],
+        activityLog: [],
+        pinHash: pinHash,
+        pinEnabled: Boolean(pinHash)
       };
-      const createdGroup = await createGroupInSupabase(newGroupData);
-      setCurrentGroupId(createdGroup.id);
+      const newGroup = await createGroupInSupabase(newGroupData);
+      setCurrentGroupId(newGroup.id);
     } catch (error) {
       console.error("Error creating group:", error);
-      alert("Failed to create group. Please check your connection.");
+      alert("Failed to create group.");
     }
   };
 
   const handleSelectGroup = (groupId) => {
-    setCurrentGroupId(groupId);
+    // Lock the current group if it's PIN-protected (security feature #1)
+    const currentGroup = groups.find(g => g.id === currentGroupId);
+    if (currentGroup && currentGroup.pinEnabled) {
+      lockGroup(currentGroupId);
+    }
+
+    // Check if new group requires PIN
+    const group = groups.find(g => g.id === groupId);
+    if (group && group.pinEnabled && !isGroupUnlocked(groupId)) {
+      // Group is PIN protected and not unlocked
+      setPinModalGroupId(groupId);
+      setPinModalMode('enter');
+      setIsPinModalOpen(true);
+    } else {
+      // No PIN or already unlocked
+      setCurrentGroupId(groupId);
+    }
+
+    // Reset inactivity timer
+    resetInactivityTimer();
   };
 
   const handleEditGroup = async (groupId, newName) => {
@@ -138,26 +225,94 @@ function App() {
     }
   };
 
+  const handleSetPin = (groupId) => {
+    setPinModalGroupId(groupId);
+    setPinModalMode('set');
+    setIsPinModalOpen(true);
+  };
+
+  const handlePinSubmit = async (pin) => {
+    try {
+      if (pinModalMode === 'set') {
+        // Setting/changing PIN
+        const pinHash = await hashPin(pin);
+        const group = groups.find(g => g.id === pinModalGroupId);
+        if (group) {
+          await updateGroupInSupabase(pinModalGroupId, {
+            pinHash: pinHash,
+            pinEnabled: true
+          });
+          markGroupUnlocked(pinModalGroupId);
+          alert('PIN set successfully!');
+        }
+      } else {
+        // Verifying PIN
+        const group = groups.find(g => g.id === pinModalGroupId);
+        if (group && group.pinHash) {
+          const isValid = await verifyPin(pin, group.pinHash);
+          if (isValid) {
+            markGroupUnlocked(pinModalGroupId);
+            setCurrentGroupId(pinModalGroupId);
+          } else {
+            alert('Incorrect PIN!');
+            return; // Don't close modal
+          }
+        }
+      }
+      setIsPinModalOpen(false);
+      setPinModalGroupId(null);
+    } catch (error) {
+      console.error('Error handling PIN:', error);
+      alert('Failed to process PIN.');
+    }
+  };
+
   // --- Expense & Participant Handlers (Now saving to Firestore) ---
 
   const handleAddExpense = (newExpense) => {
     const updatedExpenses = [newExpense, ...expenses];
     // Optimistic update
     setExpenses(updatedExpenses);
-    saveGroupData(participants, updatedExpenses);
+
+    // Create activity
+    const actorName = getActorName(participants);
+    const description = formatActivityDescription('added', 'expense', newExpense);
+    const activity = createActivity('added', actorName, 'expense', newExpense.id, description, {
+      previousState: null // No previous state for new expense
+    });
+
+    saveGroupData(participants, updatedExpenses, activity);
   };
 
   const handleEditExpense = (updatedExpense) => {
+    const oldExpense = expenses.find(e => e.id === updatedExpense.id);
     const updatedExpenses = expenses.map(e => e.id === updatedExpense.id ? updatedExpense : e);
     setExpenses(updatedExpenses);
-    saveGroupData(participants, updatedExpenses);
+
+    // Create activity
+    const actorName = getActorName(participants);
+    const description = formatActivityDescription('edited', 'expense', updatedExpense);
+    const activity = createActivity('edited', actorName, 'expense', updatedExpense.id, description, {
+      previousState: oldExpense // Store old expense for undo
+    });
+
+    saveGroupData(participants, updatedExpenses, activity);
   };
 
   const handleDeleteExpense = (expenseId) => {
     if (confirm('Are you sure you want to delete this expense?')) {
+      const deletedExpense = expenses.find(e => e.id === expenseId);
       const updatedExpenses = expenses.filter(e => e.id !== expenseId);
       setExpenses(updatedExpenses);
-      saveGroupData(participants, updatedExpenses);
+
+      // Create activity
+      const actorName = getActorName(participants);
+      const description = formatActivityDescription('deleted', 'expense', deletedExpense);
+      const activity = createActivity('deleted', actorName, 'expense', expenseId, description, {
+        previousState: deletedExpense // Store deleted expense for undo
+      });
+
+      saveGroupData(participants, updatedExpenses, activity);
     }
   };
 
@@ -169,7 +324,17 @@ function App() {
   const handleSettle = (settlement) => {
     const updatedExpenses = [settlement, ...expenses];
     setExpenses(updatedExpenses);
-    saveGroupData(participants, updatedExpenses);
+
+    // Create activity for settlement
+    const actorName = getActorName(participants);
+    const fromPerson = participants.find(p => p.id === settlement.paidBy);
+    const toPerson = participants.find(p => p.id === settlement.paidTo);
+    const description = `Recorded payment: ${fromPerson?.name} paid ${toPerson?.name} $${settlement.amount.toFixed(2)}`;
+    const activity = createActivity('added', actorName, 'settlement', settlement.id, description, {
+      previousState: null
+    });
+
+    saveGroupData(participants, updatedExpenses, activity);
   };
 
   const handleAddParticipant = (newParticipant) => {
@@ -214,6 +379,53 @@ function App() {
   // Calculate average based on ACTIVE participants only (not all participants)
   const avgPerPerson = activeParticipants.length > 0 ? totalExpenses / activeParticipants.length : 0;
 
+  // Undo handler
+  const handleUndo = async (activity) => {
+    if (!activity.details?.previousState) {
+      alert('Cannot undo this action');
+      return;
+    }
+
+    if (!confirm(`Undo: ${activity.description}?`)) return;
+
+    const { previousState } = activity.details;
+    let updatedExpenses = [...expenses];
+
+    // Undo based on action type
+    if (activity.targetType === 'expense') {
+      if (activity.action === 'added') {
+        // Remove the added expense
+        updatedExpenses = expenses.filter(e => e.id !== activity.targetId);
+      } else if (activity.action === 'edited') {
+        // Restore previous expense state
+        updatedExpenses = expenses.map(e =>
+          e.id === activity.targetId ? previousState : e
+        );
+      } else if (activity.action === 'deleted') {
+        // Restore deleted expense
+        updatedExpenses = [previousState, ...expenses];
+      }
+    }
+
+    // Remove the activity from log
+    const updatedActivityLog = activityLog.filter(a => a.id !== activity.id);
+
+    setExpenses(updatedExpenses);
+    setActivityLog(updatedActivityLog);
+
+    // Save without creating new activity
+    try {
+      await updateGroupInSupabase(currentGroupId, {
+        participants,
+        expenses: updatedExpenses,
+        activityLog: updatedActivityLog
+      });
+    } catch (error) {
+      console.error("Error undoing action:", error);
+      alert("Failed to undo. Please try again.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-12">
       {/* Header */}
@@ -242,6 +454,7 @@ function App() {
                   onEditGroup={handleEditGroup}
                   onDeleteGroup={handleDeleteGroup}
                   onShareGroup={handleShareGroup}
+                  onSetPin={handleSetPin}
                 />
               </div>
             </div>
@@ -278,6 +491,7 @@ function App() {
                   onEditGroup={handleEditGroup}
                   onDeleteGroup={handleDeleteGroup}
                   onShareGroup={handleShareGroup}
+                  onSetPin={handleSetPin}
                 />
               </div>
               <button
@@ -317,6 +531,18 @@ function App() {
               <div className="flex items-center gap-2">
                 <UsersIcon size={16} />
                 Participants ({participants.length})
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('activity')}
+              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors ${activeTab === 'activity'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <Clock size={16} />
+                Activity
               </div>
             </button>
           </div>
@@ -386,6 +612,19 @@ function App() {
             />
           </div>
         )}
+
+        {activeTab === 'activity' && (
+          <div className="max-w-4xl">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Activity Log</h2>
+              <p className="text-gray-600">Track all changes to this group</p>
+            </div>
+            <ActivityLog
+              activities={activityLog}
+              onUndo={handleUndo}
+            />
+          </div>
+        )}
       </main>
 
       <AddExpenseModal
@@ -415,6 +654,17 @@ function App() {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         groupData={shareGroupData}
+      />
+
+      <PinModal
+        isOpen={isPinModalOpen}
+        onClose={() => {
+          setIsPinModalOpen(false);
+          setPinModalGroupId(null);
+        }}
+        onSubmit={handlePinSubmit}
+        mode={pinModalMode}
+        groupName={groups.find(g => g.id === pinModalGroupId)?.name}
       />
     </div>
   );

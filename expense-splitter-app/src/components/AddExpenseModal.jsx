@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Users, Edit } from 'lucide-react';
+import { X, Plus, Users, Edit, Camera, Loader } from 'lucide-react';
 import { categories } from '../utils/categories';
+import Tesseract from 'tesseract.js';
 
 const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExpense }) => {
     const isEditing = !!editExpense;
@@ -12,6 +13,8 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     const [splitType, setSplitType] = useState('equal');
     const [selectedParticipants, setSelectedParticipants] = useState([]);
     const [customSplits, setCustomSplits] = useState({});
+    const [receiptImage, setReceiptImage] = useState(null);
+    const [isProcessingOCR, setIsProcessingOCR] = useState(false);
 
     useEffect(() => {
         if (editExpense) {
@@ -50,6 +53,34 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             ...prev,
             [userId]: parseFloat(value) || 0
         }));
+    };
+
+    const handleReceiptUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setReceiptImage(event.target?.result);
+        };
+        reader.readAsDataURL(file);
+
+        setIsProcessingOCR(true);
+        try {
+            const result = await Tesseract.recognize(file, 'eng');
+            const text = result.data.text;
+
+            const amountPattern = /total[:\s]*\$?([\d,]+\.\d{2})/i;
+            const match = text.match(amountPattern);
+            if (match) {
+                const cleanAmount = match[1].replace(/,/g, '');
+                setAmount(cleanAmount);
+            }
+        } catch (error) {
+            console.error('OCR Error:', error);
+        } finally {
+            setIsProcessingOCR(false);
+        }
     };
 
     const calculateShares = () => {
@@ -113,6 +144,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         setCategory('other');
         setSplitType('equal');
         setCustomSplits({});
+        setReceiptImage(null);
     };
 
     if (!isOpen) return null;
@@ -120,8 +152,8 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     const shares = calculateShares();
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                         {isEditing ? <><Edit size={20} /> Edit Expense</> : <><Plus size={20} /> Add New Expense</>}
@@ -159,6 +191,52 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                                 step="0.01"
                                 required
                             />
+                        </div>
+                    </div>
+
+                    {/* Receipt Upload */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                            <Camera size={16} />
+                            Receipt (Optional)
+                        </label>
+                        <div className="space-y-2">
+                            <div className="flex gap-2">
+                                <label className="flex-1 cursor-pointer">
+                                    <div className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 transition-colors">
+                                        <Camera size={20} className="text-gray-400" />
+                                        <span className="text-sm text-gray-600">
+                                            {receiptImage ? 'Change Receipt' : 'Upload Receipt'}
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleReceiptUpload}
+                                        className="hidden"
+                                    />
+                                </label>
+                                {receiptImage && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setReceiptImage(null)}
+                                        className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                )}
+                            </div>
+                            {isProcessingOCR && (
+                                <div className="flex items-center gap-2 text-sm text-indigo-600">
+                                    <Loader size={16} className="animate-spin" />
+                                    Extracting amount from receipt...
+                                </div>
+                            )}
+                            {receiptImage && (
+                                <div className="relative">
+                                    <img src={receiptImage} alt="Receipt" className="w-full max-h-32 object-contain rounded-lg border border-gray-200" />
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -219,8 +297,8 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                                 type="button"
                                 onClick={() => setSplitType('equal')}
                                 className={`flex-1 p-3 rounded-lg border-2 transition-colors ${splitType === 'equal'
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-gray-200 hover:border-gray-300'
+                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                    : 'border-gray-200 hover:border-gray-300'
                                     }`}
                             >
                                 Equal
@@ -229,8 +307,8 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                                 type="button"
                                 onClick={() => setSplitType('exact')}
                                 className={`flex-1 p-3 rounded-lg border-2 transition-colors ${splitType === 'exact'
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-gray-200 hover:border-gray-300'
+                                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                    : 'border-gray-200 hover:border-gray-300'
                                     }`}
                             >
                                 Exact Amounts

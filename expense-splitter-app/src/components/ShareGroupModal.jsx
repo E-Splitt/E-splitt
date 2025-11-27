@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Copy, Download, Share2, QrCode } from 'lucide-react';
+import { X, Copy, Download, Share2 } from 'lucide-react';
 
 const ShareGroupModal = ({ isOpen, onClose, groupData }) => {
     const [copied, setCopied] = useState(false);
@@ -33,8 +33,8 @@ const ShareGroupModal = ({ isOpen, onClose, groupData }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                         <Share2 size={20} />
