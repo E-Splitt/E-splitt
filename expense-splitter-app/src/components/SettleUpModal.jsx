@@ -30,21 +30,26 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
             return;
         }
 
+        const fromPerson = participants.find(p => p.id === from);
+        const toPerson = participants.find(p => p.id === to);
+
         const settlement = {
             id: Date.now(),
             date: new Date().toLocaleDateString(),
-            description: note || `Settlement: ${participants.find(p => p.id === from)?.name} paid ${participants.find(p => p.id === to)?.name}`,
+            description: note || `Settlement: ${fromPerson?.name} paid ${toPerson?.name}`,
             amount: amountFloat,
             paidBy: from,
+            paidByName: fromPerson?.name, // Store name to preserve it
             paidTo: to,
+            paidToName: toPerson?.name, // Store name to preserve it
             category: 'settlement',
             shares: { [to]: amountFloat },
             isSettlement: true
         };
 
         onSettle(settlement);
-        onClose();
         resetForm();
+        onClose(); // Close modal after success
     };
 
     const resetForm = () => {

@@ -43,19 +43,18 @@ export const formatActivityDescription = (action, targetType, data) => {
     return `${action} ${targetType}`;
 };
 
-// Get actor name from participants or use default
-export const getActorName = (participants) => {
-    // Try to get from localStorage (if user set their name)
-    const savedName = localStorage.getItem('userName');
-    if (savedName) return savedName;
+// Get actor name from display name or use default
+export const getActorName = (displayName = '', userEmail = '') => {
+    // Use display name if available
+    if (displayName && displayName.trim()) {
+        return displayName.trim();
+    }
 
-    // Prompt user to set their name on first action
-    const name = prompt('Enter your name (this will be shown in activity log):');
-    if (name && name.trim()) {
-        localStorage.setItem('userName', name.trim());
-        return name.trim();
+    // Fallback to email username (part before @)
+    if (userEmail) {
+        return userEmail.split('@')[0];
     }
 
     // Default to "Someone" if no name is set
-    return 'Someone'
+    return 'Someone';
 };

@@ -9,6 +9,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
     const [newGroupPin, setNewGroupPin] = useState('');
     const [editGroupName, setEditGroupName] = useState('');
     const [showMenu, setShowMenu] = useState(false);
+    const [showGroupList, setShowGroupList] = useState(false); // New state for custom dropdown
 
     const handleCreate = () => {
         if (newGroupName.trim()) {
@@ -49,38 +50,77 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
     return (
         <div className="relative">
             <div className="flex items-center gap-2">
-                <Users size={16} className="text-gray-500" />
-                <select
-                    value={currentGroup}
-                    onChange={(e) => onSelectGroup(e.target.value)}
-                    className="p-2 pr-8 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
-                >
-                    {groups.map(group => {
-                        const unlockedGroups = getUnlockedGroups();
-                        const isUnlocked = unlockedGroups.includes(group.id);
-                        const isPinProtected = group.pinEnabled;
-                        const lockIcon = isPinProtected ? (isUnlocked ? '🔓 ' : '🔒 ') : '';
+                <Users size={20} className="text-gray-500" />
 
-                        return (
-                            <option key={group.id} value={group.id}>
-                                {lockIcon}{group.name}
-                            </option>
-                        );
-                    })}
-                </select>
+                {/* Custom Dropdown Trigger */}
+                <div className="relative">
+                    <button
+                        onClick={() => setShowGroupList(!showGroupList)}
+                        className="flex items-center justify-between gap-2 p-3 border border-gray-300 rounded-lg text-base font-medium bg-white min-w-[200px] max-w-[300px] hover:border-indigo-300 transition-colors text-left"
+                    >
+                        <span className="truncate">
+                            {currentGroupObj ? (
+                                <>
+                                    {currentGroupObj.pinEnabled && (
+                                        <span className="mr-1">{getUnlockedGroups().includes(currentGroupObj.id) ? '🔓' : '🔒'}</span>
+                                    )}
+                                    {currentGroupObj.name}
+                                </>
+                            ) : 'Select Group'}
+                        </span>
+                        <span className="text-gray-400 text-xs">▼</span>
+                    </button>
+
+                    {/* Custom Dropdown List */}
+                    {showGroupList && (
+                        <>
+                            <div className="fixed inset-0 z-10" onClick={() => setShowGroupList(false)} />
+                            <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto">
+                                {groups.map(group => {
+                                    const unlockedGroups = getUnlockedGroups();
+                                    const isUnlocked = unlockedGroups.includes(group.id);
+                                    const isPinProtected = group.pinEnabled;
+                                    const lockIcon = isPinProtected ? (isUnlocked ? '🔓 ' : '🔒 ') : '';
+                                    const isSelected = group.id === currentGroup;
+
+                                    return (
+                                        <button
+                                            key={group.id}
+                                            onClick={() => {
+                                                onSelectGroup(group.id);
+                                                setShowGroupList(false);
+                                            }}
+                                            className={`w-full text-left px-4 py-3 text-sm hover:bg-indigo-50 transition-colors flex items-center gap-2 ${isSelected ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
+                                        >
+                                            <span>{lockIcon}</span>
+                                            <span className="truncate">{group.name}</span>
+                                            {isSelected && <Check size={14} className="ml-auto" />}
+                                        </button>
+                                    );
+                                })}
+                                {groups.length === 0 && (
+                                    <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                                        No groups found
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+
                 <button
                     onClick={() => setIsCreating(true)}
                     className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                     title="Create new group"
                 >
-                    <Plus size={16} />
+                    <Plus size={20} />
                 </button>
                 <button
                     onClick={() => setShowMenu(!showMenu)}
                     className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                     title="Group options"
                 >
-                    <Edit2 size={16} />
+                    <Edit2 size={20} />
                 </button>
             </div>
 
@@ -148,6 +188,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                     placeholder="e.g., Beach Trip 2024"
                                     className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                     autoFocus
+                                    autoComplete="off"
                                     onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
                                 />
                             </div>
@@ -163,6 +204,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                     value={newGroupPin}
                                     onChange={(e) => setNewGroupPin(e.target.value.replace(/\D/g, ''))}
                                     placeholder="••••"
+                                    autoComplete="new-password"
                                     className="w-full p-2 border border-gray-300 rounded-lg text-sm text-center tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Leave blank for no PIN protection</p>
@@ -230,5 +272,4 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
         </div>
     );
 };
-
 export default GroupSelector;

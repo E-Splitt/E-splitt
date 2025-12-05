@@ -9,7 +9,7 @@ const Dashboard = ({ totalPaid, balances, participants }) => {
                 const isOwed = balance > 0;
 
                 return (
-                    <div key={person.id} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                    <div key={person.id} className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
                                 <div

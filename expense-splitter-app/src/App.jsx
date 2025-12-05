@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Receipt, Users as UsersIcon, TrendingUp, Menu, X, Clock, BarChart3, Moon, Sun, MessageSquare } from 'lucide-react';
+import { Plus, Menu, X, TrendingUp, Users as UsersIcon, Clock, MessageSquare, BarChart3 } from 'lucide-react';
+
+import { useAuth } from './contexts/AuthContext';
+import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/Dashboard';
 import ExpenseList from './components/ExpenseList';
 import AddExpenseModal from './components/AddExpenseModal';
@@ -13,7 +16,8 @@ import ShareGroupModal from './components/ShareGroupModal';
 import ActivityLog from './components/ActivityLog';
 import PinModal from './components/PinModal';
 import DevDashboard from './components/DevDashboard';
-import UserProfileModal from './components/UserProfileModal';
+import InviteMemberModal from './components/InviteMemberModal';
+import UserProfile from './components/UserProfile';
 import Chat from './components/Chat';
 import ESplitLogo from './components/ESplitLogo';
 import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
@@ -30,6 +34,13 @@ import {
   logDeviceAccess,
   sendMessage
 } from './services/supabaseService';
+import {
+  addGroupMember,
+  removeGroupMember,
+  updateMemberRole,
+  getGroupMembers,
+  subscribeToGroupMembers
+} from './services/memberService';
 
 function App() {
   const [groups, setGroups] = useState([]);
@@ -52,38 +63,78 @@ function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
   const [chatMessages, setChatMessages] = useState([]);
 
+  // Group Members State
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [isInviteMemberModalOpen, setIsInviteMemberModalOpen] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState('member');
+
+  // User Profile State
+  const [displayName, setDisplayName] = useState('');
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
   // Dev Dashboard State
   const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [logoClickTimer, setLogoClickTimer] = useState(null);
 
-  // User Profile State
-  const [userProfile, setUserProfile] = useState(null);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-
-  // Load user profile on mount
-  useEffect(() => {
-    const storedProfile = localStorage.getItem('userProfile');
-    if (storedProfile) {
-      setUserProfile(JSON.parse(storedProfile));
-    } else {
-      setIsProfileModalOpen(true);
-    }
-  }, []);
-
-  const handleSaveProfile = (profile) => {
-    setUserProfile(profile);
-    setIsProfileModalOpen(false);
-  };
+  // Authentication - must be before useEffects that use user
+  const { user, loading, signOut } = useAuth();
 
   // Load groups from Firestore
+  // Load groups from Supabase
   useEffect(() => {
+    if (!user) return;
+
     const unsubscribe = subscribeToGroups((fetchedGroups) => {
       setGroups(fetchedGroups);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
+
+  // Load user display name
+  useEffect(() => {
+    if (user) {
+      const name = user.user_metadata?.display_name || user.user_metadata?.name || '';
+      setDisplayName(name);
+    }
+  }, [user]);
+
+  // Load and subscribe to group members
+  useEffect(() => {
+    if (!currentGroupId || !user) {
+      setGroupMembers([]);
+      setCurrentUserRole('member');
+      return;
+    }
+
+    // Fetch members for current group
+    const loadMembers = async () => {
+      try {
+        const members = await getGroupMembers(currentGroupId);
+        setGroupMembers(members);
+
+        // Find current user's role
+        const currentMember = members.find(m => m.userId === user.id);
+        setCurrentUserRole(currentMember?.role || 'member');
+      } catch (error) {
+        console.error('Error loading members:', error);
+      }
+    };
+
+    loadMembers();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToGroupMembers(currentGroupId, (updatedMembers) => {
+      setGroupMembers(updatedMembers);
+
+      // Update current user's role
+      const currentMember = updatedMembers.find(m => m.userId === user.id);
+      setCurrentUserRole(currentMember?.role || 'member');
+    });
+
+    return () => unsubscribe();
+  }, [currentGroupId, user]);
 
   // Log device access on load
   useEffect(() => {
@@ -104,54 +155,56 @@ function App() {
       // Prefer "Welcome Group" (g_default001)
       const defaultGroup = groups.find(g => g.id === 'g_default001');
 
-      if (defaultGroup) {
-        setCurrentGroupId(defaultGroup.id);
-      } else {
-        // If Welcome Group doesn't exist, create it!
-        const createWelcomeGroup = async () => {
-          try {
-            const newGroupData = {
-              name: 'Welcome Group',
-              participants: [],
-              expenses: [],
-              activityLog: [],
-              pinHash: null,
-              pinEnabled: false
-            };
-            // Pass custom ID 'g_default001'
-            await createGroupInSupabase(newGroupData, 'g_default001');
-            // Selection will happen on next render when groups update
-          } catch (e) {
-            console.error("Error creating default group:", e);
-            // Fallback to first available
-            setCurrentGroupId(groups[0].id);
-          }
-        };
-        createWelcomeGroup();
-      }
-    } else if (groups.length === 0 && !currentGroupId) {
-      // If absolutely no groups, create Welcome Group
-      const createWelcomeGroup = async () => {
-        try {
-          const newGroupData = {
-            name: 'Welcome Group',
-            participants: [],
-            expenses: [],
-            activityLog: [],
-            pinHash: null,
-            pinEnabled: false
-          };
-          await createGroupInSupabase(newGroupData, 'g_default001');
-        } catch (e) {
-          console.error("Error creating initial group:", e);
-        }
-      };
-      // Only try once to avoid loops
-      const hasInit = localStorage.getItem('hasInitWelcome');
-      if (!hasInit) {
-        createWelcomeGroup();
-        localStorage.setItem('hasInitWelcome', 'true');
-      }
+      // if (defaultGroup) {
+      //   setCurrentGroupId(defaultGroup.id);
+      // } else {
+      //   // If Welcome Group doesn't exist, create it!
+      //   const createWelcomeGroup = async () => {
+      //     try {
+      //       const newGroupData = {
+      //         name: 'Welcome Group',
+      //         participants: [],
+      //         expenses: [],
+      //         activityLog: [],
+      //         pinHash: null,
+      //         pinEnabled: false
+      //       };
+      //       // Pass custom ID 'g_default001'
+      //       await createGroupInSupabase(newGroupData, 'g_default001');
+      //       // Selection will happen on next render when groups update
+      //     } catch (e) {
+      //       console.error("Error creating default group:", e);
+      //       // Fallback to first available
+      //       setCurrentGroupId(groups[0].id);
+      //     }
+      //   };
+      //   createWelcomeGroup();
+      // }
+      // Just select first group
+      setCurrentGroupId(groups[0].id);
+      // } else if (groups.length === 0 && !currentGroupId) {
+      //   // If absolutely no groups, create Welcome Group
+      //   const createWelcomeGroup = async () => {
+      //     try {
+      //       const newGroupData = {
+      //         name: 'Welcome Group',
+      //         participants: [],
+      //         expenses: [],
+      //         activityLog: [],
+      //         pinHash: null,
+      //         pinEnabled: false
+      //       };
+      //       await createGroupInSupabase(newGroupData, 'g_default001');
+      //     } catch (e) {
+      //       console.error("Error creating initial group:", e);
+      //     }
+      //   };
+      //   // Only try once to avoid loops
+      //   const hasInit = localStorage.getItem('hasInitWelcome');
+      //   if (!hasInit) {
+      //     createWelcomeGroup();
+      //     localStorage.setItem('hasInitWelcome', 'true');
+      //   }
     }
   }, [groups, currentGroupId]);
 
@@ -278,9 +331,17 @@ function App() {
         pinHash = await hashPin(pin);
       }
 
+      // Auto-add current user as first participant
+      const userName = displayName || user?.email?.split('@')[0] || 'You';
+      const userParticipant = {
+        id: user?.id || `user_${Date.now()}`,
+        name: userName,
+        color: `hsl(${Math.random() * 360}, 70%, 50%)`
+      };
+
       const newGroupData = {
         name: groupName,
-        participants: [],
+        participants: [userParticipant],
         expenses: [],
         activityLog: [],
         pinHash: pinHash,
@@ -291,28 +352,6 @@ function App() {
     } catch (error) {
       console.error("Error creating group:", error);
       alert("Failed to create group.");
-    }
-  };
-
-  const handleSendMessage = async (text) => {
-    if (!currentGroupId || !userProfile) return;
-
-    const message = {
-      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substr(2),
-      text,
-      userId: userProfile.id,
-      userName: userProfile.name,
-      timestamp: new Date().toISOString()
-    };
-
-    try {
-      // Optimistic update (optional, but good for UX)
-      // setChatMessages([...chatMessages, message]); 
-      // Actually, let's rely on subscription for consistency
-
-      await sendMessage(currentGroupId, message);
-    } catch (error) {
-      alert("Failed to send message");
     }
   };
 
@@ -412,23 +451,28 @@ function App() {
 
   // --- Expense & Participant Handlers (Now saving to Firestore) ---
 
-  const handleAddExpense = (newExpense) => {
+  const handleAddExpense = async (newExpense) => {
     const updatedExpenses = [newExpense, ...expenses];
     // Optimistic update
     setExpenses(updatedExpenses);
 
     // Create activity
-    const actorName = getActorName(participants);
+    const actorName = displayName || user?.email?.split('@')[0] || 'User';
     const description = formatActivityDescription('added', 'expense', newExpense);
     const activity = createActivity('added', actorName, 'expense', newExpense.id, description, {
-      previousState: null // No previous state for new expense
+      previousState: null
     });
 
-    saveGroupData(participants, updatedExpenses, activity);
-    notifyNewExpense(newExpense, participants);
+    try {
+      await saveGroupData(participants, updatedExpenses, activity);
+      notifyNewExpense(newExpense, participants);
+    } catch (error) {
+      console.error('Error in notifications:', error);
+      // Don't throw - expense was saved successfully
+    }
   };
 
-  const handleEditExpense = (updatedExpense) => {
+  const handleEditExpense = async (updatedExpense) => {
     const oldExpense = expenses.find(e => e.id === updatedExpense.id);
     const updatedExpenses = expenses.map(e => e.id === updatedExpense.id ? updatedExpense : e);
     setExpenses(updatedExpenses);
@@ -440,7 +484,7 @@ function App() {
       previousState: oldExpense // Store old expense for undo
     });
 
-    saveGroupData(participants, updatedExpenses, activity);
+    await saveGroupData(participants, updatedExpenses, activity);
     notifyExpenseEdited(updatedExpense, participants);
   };
 
@@ -472,7 +516,7 @@ function App() {
     setExpenses(updatedExpenses);
 
     // Create activity for settlement
-    const actorName = getActorName(participants);
+    const actorName = displayName || user?.email?.split('@')[0] || 'User';
     const fromPerson = participants.find(p => p.id === settlement.paidBy);
     const toPerson = participants.find(p => p.id === settlement.paidTo);
     const description = `Recorded payment: ${fromPerson?.name} paid ${toPerson?.name} $${settlement.amount.toFixed(2)}`;
@@ -480,25 +524,43 @@ function App() {
       previousState: null
     });
 
-    saveGroupData(participants, updatedExpenses, activity);
-    notifyPaymentRecorded(settlement, participants);
+    // Don't await - let it save in background
+    saveGroupData(participants, updatedExpenses, activity).catch(err => {
+      console.error('Error saving settlement:', err);
+    });
+
+    try {
+      notifyPaymentRecorded(settlement, participants);
+    } catch (error) {
+      console.error('Error notifying:', error);
+    }
   };
 
-  const handleAddParticipant = (newParticipant) => {
+  const handleAddParticipant = async (newParticipant) => {
     const updatedParticipants = [...participants, newParticipant];
     setParticipants(updatedParticipants);
-    saveGroupData(updatedParticipants, expenses);
+    await saveGroupData(updatedParticipants, expenses);
+
+    // If participant has an email, try to add them as a member for access
+    if (newParticipant.email) {
+      try {
+        // This grants them access to see the group
+        await addGroupMember(currentGroupId, newParticipant.email, 'member');
+      } catch (error) {
+        console.error("Error adding group member access:", error);
+        // We don't block the UI update if this fails, but we log it
+      }
+    }
   };
 
   const handleRemoveParticipant = (userId) => {
-    // Check if participant has any expenses
-    const hasExpenses = expenses.some(expense =>
-      expense.paidBy === userId ||
-      (expense.shares && expense.shares[userId] > 0)
-    );
+    // Check if participant has outstanding balance (not just if they have expenses)
+    const balance = balances[userId] || 0;
 
-    if (hasExpenses) {
-      alert('Cannot remove participant with existing expenses. Delete their expenses first.');
+    if (Math.abs(balance) > 0.01) {  // Allow for small rounding errors
+      const participant = participants.find(p => p.id === userId);
+      const owesOrOwed = balance > 0 ? 'is owed' : 'owes';
+      alert(`Cannot remove ${participant?.name}: they still ${owesOrOwed} $${Math.abs(balance).toFixed(2)}. Please settle up first.`);
       return;
     }
 
@@ -512,6 +574,57 @@ function App() {
   const handleOpenSettleModal = (prefill) => {
     setSettlePrefill(prefill);
     setIsSettleModalOpen(true);
+  };
+
+  // Chat handler
+  const handleSendMessage = async (text) => {
+    if (!currentGroupId || !user) return;
+
+    const message = {
+      id: crypto.randomUUID ? crypto.randomUUID() : `msg_${Date.now()}`,
+      text,
+      userId: user.id,
+      userName: displayName || user.email.split('@')[0],
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      await sendMessage(currentGroupId, message);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('Failed to send message');
+    }
+  };
+
+  // Member management handlers
+  const handleInviteMember = async (userEmail, role) => {
+    try {
+      await addGroupMember(currentGroupId, userEmail, role);
+      alert('Member invited successfully!');
+    } catch (error) {
+      console.error('Error inviting member:', error);
+      throw error;
+    }
+  };
+
+  const handleRemoveMember = async (userId) => {
+    if (!confirm('Remove this member from the group?')) return;
+
+    try {
+      await removeGroupMember(currentGroupId, userId);
+    } catch (error) {
+      console.error('Error removing member:', error);
+      alert('Failed to remove member');
+    }
+  };
+
+  const handleUpdateMemberRole = async (userId, newRole) => {
+    try {
+      await updateMemberRole(currentGroupId, userId, newRole);
+    } catch (error) {
+      console.error('Error updating role:', error);
+      alert('Failed to update role');
+    }
   };
 
   const { balances, totalPaid, totalShare } = calculateBalances(expenses, participants);
@@ -573,6 +686,22 @@ function App() {
     }
   };
 
+  // Authentication gate
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 transition-colors">
       <header className="bg-white shadow-sm sticky top-0 z-10 transition-colors">
@@ -614,7 +743,18 @@ function App() {
                 <Plus size={20} />
                 <span className="hidden md:inline">Add Expense</span>
               </button>
-            </div >
+
+              {/* User Info & Logout */}
+              <div className="flex items-center gap-2 pl-2 border-l border-gray-200">
+                <span className="text-sm text-gray-600 hidden lg:inline">{user?.email}</span>
+                <button
+                  onClick={() => signOut()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
 
             {/* Mobile Menu Button */}
             <button
@@ -779,6 +919,7 @@ function App() {
             </div>
             <ParticipantManager
               participants={participants}
+              currentUserEmail={user?.email}
               onAdd={handleAddParticipant}
               onRemove={handleRemoveParticipant}
             />
@@ -806,7 +947,7 @@ function App() {
             </div>
             <Chat
               messages={chatMessages}
-              currentUser={userProfile}
+              currentUser={{ id: user?.id, name: displayName || user?.email }}
               onSendMessage={handleSendMessage}
             />
           </div>
@@ -860,15 +1001,16 @@ function App() {
         groupName={groups.find(g => g.id === pinModalGroupId)?.name}
       />
 
+      <InviteMemberModal
+        isOpen={isInviteMemberModalOpen}
+        onClose={() => setIsInviteMemberModalOpen(false)}
+        onInvite={handleInviteMember}
+        groupName={groups.find(g => g.id === currentGroupId)?.name || 'this group'}
+      />
+
       <DevDashboard
         isOpen={isDevModalOpen}
         onClose={() => setIsDevModalOpen(false)}
-      />
-
-      <UserProfileModal
-        isOpen={isProfileModalOpen}
-        onSave={handleSaveProfile}
-        initialProfile={userProfile}
       />
     </div>
   );

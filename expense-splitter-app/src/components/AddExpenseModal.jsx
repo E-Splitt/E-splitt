@@ -15,6 +15,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     const [customSplits, setCustomSplits] = useState({});
     const [receiptImage, setReceiptImage] = useState(null);
     const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false); // For mobile fix
 
     useEffect(() => {
         if (editExpense) {
@@ -34,11 +35,12 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             if (!isEqual) {
                 setCustomSplits(editExpense.shares);
             }
-        } else if (participants.length > 0 && !paidBy) {
+        } else if (isOpen && participants.length > 0 && selectedParticipants.length === 0) {
+            // Only set defaults when modal first opens and no participants selected
             setPaidBy(participants[0].id);
             setSelectedParticipants(participants.map(p => p.id));
         }
-    }, [editExpense, participants, paidBy]);
+    }, [editExpense, isOpen]);
 
     const handleParticipantToggle = (userId) => {
         setSelectedParticipants(prev =>
@@ -100,8 +102,10 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         return shares;
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (isSubmitting) return; // Prevent double submission
 
         const amountFloat = parseFloat(amount);
         if (!description || isNaN(amountFloat) || amountFloat <= 0 || selectedParticipants.length === 0) {
@@ -128,14 +132,23 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             isSettlement: false
         };
 
-        if (isEditing) {
-            onEdit(expenseData);
-        } else {
-            onAdd(expenseData);
-        }
+        try {
+            setIsSubmitting(true);
 
-        onClose();
-        resetForm();
+            if (isEditing) {
+                await onEdit(expenseData);
+            } else {
+                await onAdd(expenseData);
+            }
+
+            onClose();
+            resetForm();
+        } catch (error) {
+            console.error('Error saving expense:', error);
+            alert('Failed to save expense. Please try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const resetForm = () => {
@@ -145,6 +158,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         setSplitType('equal');
         setCustomSplits({});
         setReceiptImage(null);
+        setIsSubmitting(false); // Reset for mobile
     };
 
     if (!isOpen) return null;
@@ -365,9 +379,19 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                     <div className="pt-4">
                         <button
                             type="submit"
-                            className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                            disabled={isSubmitting}
+                            className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isEditing ? <><Edit size={20} /> Update Expense</> : <><Plus size={20} /> Add Expense</>}
+                            {isSubmitting ? (
+                                <>
+                                    <Loader size={20} className="animate-spin" />
+                                    Saving...
+                                </>
+                            ) : isEditing ? (
+                                <><Edit size={20} /> Update Expense</>
+                            ) : (
+                                <><Plus size={20} /> Add Expense</>
+                            )}
                         </button>
                     </div>
                 </form>

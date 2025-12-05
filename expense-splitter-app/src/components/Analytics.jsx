@@ -129,76 +129,83 @@ const Analytics = ({ expenses, participants }) => {
             {/* Charts Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Monthly Trend */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                         <TrendingUp size={20} className="text-indigo-600" />
                         Monthly Spending Trend
                     </h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <LineChart data={monthlyData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                            <YAxis tick={{ fontSize: 12 }} />
-                            <Tooltip
-                                contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
-                                formatter={(value) => [`$${value}`, 'Amount']}
-                            />
-                            <Line
-                                type="monotone"
-                                dataKey="amount"
-                                stroke="#6366f1"
-                                strokeWidth={3}
-                                dot={{ fill: '#6366f1', r: 5 }}
-                                activeDot={{ r: 7 }}
-                            />
-                        </LineChart>
-                    </ResponsiveContainer>
+                    <div className="h-[200px] sm:h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={monthlyData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis dataKey="month" tick={{ fontSize: 10 }} tickMargin={10} />
+                                <YAxis tick={{ fontSize: 10 }} width={40} />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+                                    formatter={(value) => [`$${value}`, 'Amount']}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="amount"
+                                    stroke="#6366f1"
+                                    strokeWidth={3}
+                                    dot={{ fill: '#6366f1', r: 4 }}
+                                    activeDot={{ r: 6 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
 
                 {/* Category Breakdown */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">
                         Spending by Category
                     </h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <PieChart>
-                            <Pie
-                                data={categoryData}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                outerRadius={100}
-                                fill="#8884d8"
-                                dataKey="value"
-                            >
-                                {categoryData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip formatter={(value) => `$${value}`} />
-                        </PieChart>
-                    </ResponsiveContainer>
+                    <div className="h-[200px] sm:h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={categoryData}
+                                    cx="50%"
+                                    cy="50%"
+                                    labelLine={false}
+                                    label={({ name, percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    dataKey="value"
+                                >
+                                    {categoryData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(value) => `$${value}`} contentStyle={{ fontSize: '12px' }} />
+                                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
 
                 {/* Top Spenders */}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 lg:col-span-2">
+                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 lg:col-span-2">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                         <Users size={20} className="text-purple-600" />
                         Top Spenders
                     </h3>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={topSpenders}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                            <YAxis tick={{ fontSize: 12 }} />
-                            <Tooltip
-                                contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
-                                formatter={(value) => [`$${value}`, 'Total Spent']}
-                            />
-                            <Bar dataKey="amount" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    <div className="h-[200px] sm:h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={topSpenders}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis dataKey="name" tick={{ fontSize: 10 }} tickMargin={10} />
+                                <YAxis tick={{ fontSize: 10 }} width={40} />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+                                    formatter={(value) => [`$${value}`, 'Total Spent']}
+                                />
+                                <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
             </div>
 

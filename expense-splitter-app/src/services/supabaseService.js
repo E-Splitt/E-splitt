@@ -18,6 +18,10 @@ const generateGroupId = () => {
 // Create a new group
 export const createGroupInSupabase = async (groupData, customId = null) => {
     try {
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
         const groupId = customId || generateGroupId();
 
         const newGroup = {
@@ -30,7 +34,11 @@ export const createGroupInSupabase = async (groupData, customId = null) => {
         const { error } = await supabase
             .from(GROUPS_TABLE)
             .insert([
-                { group_id: groupId, data: newGroup }
+                {
+                    group_id: groupId,
+                    data: newGroup,
+                    user_id: user.id // Automatically set from authenticated user
+                }
             ]);
 
         if (error) throw error;
@@ -85,9 +93,9 @@ export const deleteGroupInSupabase = async (groupId) => {
 
 // --- Real-time Listeners ---
 
-// Listen to all groups
+// Listen to all groups (RLS automatically filters to user's groups)
 export const subscribeToGroups = (callback) => {
-    // 1. Fetch initial data
+    // 1. Fetch initial data (RLS policies ensure only user's groups are returned)
     supabase
         .from(GROUPS_TABLE)
         .select('*')
@@ -98,12 +106,11 @@ export const subscribeToGroups = (callback) => {
             }
         });
 
-    // 2. Subscribe to changes
+    // 2. Subscribe to changes (RLS policies ensure only user's groups trigger updates)
     const channel = supabase
         .channel('public:groups')
         .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, (payload) => {
-            // Re-fetch all groups to ensure consistency (simplest approach for now)
-            // In a more optimized app, we'd merge the change locally.
+            // Re-fetch all groups to ensure consistency (RLS filters automatically)
             supabase
                 .from(GROUPS_TABLE)
                 .select('*')
@@ -169,6 +176,10 @@ export const subscribeToGroupData = (groupId, callback) => {
 
 export const importGroupToSupabase = async (groupData) => {
     try {
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+
         const groupId = generateGroupId();
 
         const newGroup = {
@@ -182,7 +193,11 @@ export const importGroupToSupabase = async (groupData) => {
         const { error } = await supabase
             .from(GROUPS_TABLE)
             .insert([
-                { group_id: groupId, data: newGroup }
+                {
+                    group_id: groupId,
+                    data: newGroup,
+                    user_id: user.id // Set from authenticated user
+                }
             ]);
 
         if (error) throw error;
@@ -252,7 +267,7 @@ export const sendMessage = async (groupId, message) => {
         // 2. Append new message
         const updatedMessages = [...currentMessages, message];
 
-        // 3. Update group
+        //3. Update group
         const { error: updateError } = await supabase
             .from(GROUPS_TABLE)
             .update({

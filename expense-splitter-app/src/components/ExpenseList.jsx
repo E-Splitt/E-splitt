@@ -12,9 +12,17 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
         return expense.category === filter;
     });
 
-    const getPersonName = (userId) => {
+    const getPersonName = (userId, expense = null) => {
         const person = participants.find(p => p.id === userId);
-        return person ? person.name : (userId === 'Unknown' ? 'Unknown' : `Unknown (${userId})`);
+        if (person) return person.name;
+
+        // Fallback for removed participants
+        if (expense) {
+            if (expense.paidBy === userId && expense.paidByName) return expense.paidByName;
+            if (expense.paidTo === userId && expense.paidToName) return expense.paidToName;
+        }
+
+        return userId === 'Unknown' ? 'Unknown' : `Unknown (${userId})`;
     };
 
     return (
@@ -75,9 +83,9 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
                                                             className="w-4 h-4 rounded-full flex items-center justify-center text-white text-xs font-bold"
                                                             style={{ backgroundColor: participants.find(p => p.id === expense.paidBy)?.color || '#6366f1' }}
                                                         >
-                                                            {getPersonName(expense.paidBy).charAt(0)}
+                                                            {getPersonName(expense.paidBy, expense).charAt(0)}
                                                         </div>
-                                                        {getPersonName(expense.paidBy)} paid
+                                                        {getPersonName(expense.paidBy, expense)} paid
                                                     </span>
                                                 </div>
 
@@ -85,13 +93,13 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
                                                 <div className="mt-2 flex flex-wrap gap-2">
                                                     {isSettlement ? (
                                                         <span className="text-xs text-gray-600">
-                                                            → {getPersonName(expense.paidTo)}
+                                                            → {getPersonName(expense.paidTo, expense)}
                                                         </span>
                                                     ) : (
                                                         Object.entries(expense.shares || {}).map(([userId, share]) => (
                                                             share > 0 && (
                                                                 <span key={userId} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-md">
-                                                                    {getPersonName(userId)}: ${share.toFixed(2)}
+                                                                    {getPersonName(userId, expense)}: ${share.toFixed(2)}
                                                                 </span>
                                                             )
                                                         ))
