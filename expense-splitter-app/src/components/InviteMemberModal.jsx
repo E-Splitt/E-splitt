@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Search, UserPlus, Mail, Loader } from 'lucide-react';
+import { X, Search, UserPlus, Mail, Loader, Link as LinkIcon, Copy, Check } from 'lucide-react';
 import { searchUsersByEmail } from '../services/memberService';
 
-const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName }) => {
+const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName, groupId }) => {
     const [email, setEmail] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -10,6 +10,16 @@ const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName }) => {
     const [isSearching, setIsSearching] = useState(false);
     const [isInviting, setIsInviting] = useState(false);
     const [error, setError] = useState('');
+    const [linkCopied, setLinkCopied] = useState(false);
+
+    // Generate join link
+    const joinLink = `${window.location.origin}/join/${groupId}`;
+
+    const handleCopyLink = () => {
+        navigator.clipboard.writeText(joinLink);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+    };
 
     const handleSearch = async () => {
         if (!email.trim()) return;
@@ -79,13 +89,57 @@ const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName }) => {
                 </div>
 
                 {/* Content */}
-                <div className="p-6 space-y-6">
-                    {/* Email Search */}
+                <div className="p-6 space-y-8">
+                    {/* OPTION 1: Share Link */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Search by Email
-                        </label>
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="p-1.5 bg-indigo-100 rounded text-indigo-600">
+                                <LinkIcon size={16} />
+                            </div>
+                            <h3 className="text-sm font-semibold text-gray-900">Invite via Link</h3>
+                        </div>
                         <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={joinLink}
+                                readOnly
+                                className="flex-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-600 focus:outline-none"
+                            />
+                            <button
+                                onClick={handleCopyLink}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${linkCopied
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    }`}
+                            >
+                                {linkCopied ? <Check size={16} /> : <Copy size={16} />}
+                                {linkCopied ? 'Copied' : 'Copy'}
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                            Share this link. Friends can join securely by signing in.
+                        </p>
+                    </div>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-gray-200"></div>
+                        </div>
+                        <div className="relative flex justify-center">
+                            <span className="px-2 bg-white text-sm text-gray-400">OR</span>
+                        </div>
+                    </div>
+
+                    {/* OPTION 2: Email Search */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="p-1.5 bg-indigo-100 rounded text-indigo-600">
+                                <Mail size={16} />
+                            </div>
+                            <h3 className="text-sm font-semibold text-gray-900">Invite via Email</h3>
+                        </div>
+
+                        <div className="flex gap-2 mb-2">
                             <div className="relative flex-1">
                                 <Mail size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                                 <input
@@ -110,54 +164,41 @@ const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName }) => {
                                 Search
                             </button>
                         </div>
-                    </div>
 
-                    {/* Error Message */}
-                    {error && (
-                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                            {error}
-                        </div>
-                    )}
+                        {/* Error Message */}
+                        {error && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 mb-2">
+                                {error}
+                            </div>
+                        )}
 
-                    {/* Search Results */}
-                    {searchResults.length > 0 && !selectedUser && (
-                        <div className="space-y-2">
-                            <p className="text-sm font-medium text-gray-700">
-                                Found {searchResults.length} user{searchResults.length > 1 ? 's' : ''}
-                            </p>
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {/* Search Results */}
+                        {searchResults.length > 0 && !selectedUser && (
+                            <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-1">
                                 {searchResults.map((user) => (
                                     <button
                                         key={user.id}
                                         onClick={() => setSelectedUser(user)}
-                                        className="w-full p-3 border border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-all text-left"
+                                        className="w-full p-2 hover:bg-indigo-50 rounded-md transition-colors text-left flex items-center gap-3"
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                                                <span className="text-indigo-600 font-medium">
-                                                    {user.name?.charAt(0).toUpperCase() || '?'}
-                                                </span>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-gray-900 truncate">{user.name}</p>
-                                                <p className="text-sm text-gray-500 truncate">{user.email}</p>
-                                            </div>
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-600">
+                                            {user.name?.charAt(0).toUpperCase() || '?'}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-sm text-gray-900 truncate">{user.name}</p>
+                                            <p className="text-xs text-gray-500 truncate">{user.email}</p>
                                         </div>
                                     </button>
                                 ))}
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Selected User */}
-                    {selectedUser && (
-                        <div className="space-y-4">
-                            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-full bg-indigo-200 flex items-center justify-center">
-                                        <span className="text-indigo-700 font-bold text-lg">
-                                            {selectedUser.name?.charAt(0).toUpperCase() || '?'}
-                                        </span>
+                        {/* Selected User */}
+                        {selectedUser && (
+                            <div className="space-y-4 pt-2">
+                                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-indigo-200 flex items-center justify-center text-indigo-700 font-bold">
+                                        {selectedUser.name?.charAt(0).toUpperCase() || '?'}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-semibold text-gray-900">{selectedUser.name}</p>
@@ -165,58 +206,53 @@ const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName }) => {
                                     </div>
                                     <button
                                         onClick={() => setSelectedUser(null)}
-                                        className="p-1 hover:bg-indigo-100 rounded transition-colors"
+                                        className="p-1 hover:bg-indigo-100 rounded text-indigo-600"
                                     >
-                                        <X size={16} className="text-indigo-600" />
+                                        <X size={16} />
                                     </button>
                                 </div>
-                            </div>
 
-                            {/* Role Selection */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Role
-                                </label>
-                                <select
-                                    value={role}
-                                    onChange={(e) => setRole(e.target.value)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                >
-                                    <option value="member">👤 Member - Can view and manage expenses</option>
-                                    <option value="admin">🛡️ Admin - Can manage members and expenses</option>
-                                </select>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    {role === 'admin'
-                                        ? 'Admins can invite/remove members, promote users, and manage all expenses'
-                                        : 'Members can add, edit, and delete expenses but cannot manage members'}
-                                </p>
+                                {/* Role Selection */}
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                        Role
+                                    </label>
+                                    <select
+                                        value={role}
+                                        onChange={(e) => setRole(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    >
+                                        <option value="member">👤 Member</option>
+                                        <option value="admin">🛡️ Admin</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
                     <button
                         onClick={handleClose}
-                        className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                        className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleInvite}
                         disabled={!selectedUser || isInviting}
-                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors text-sm font-medium"
                     >
                         {isInviting ? (
                             <>
-                                <Loader size={18} className="animate-spin" />
+                                <Loader size={16} className="animate-spin" />
                                 Inviting...
                             </>
                         ) : (
                             <>
-                                <UserPlus size={18} />
-                                Invite Member
+                                <UserPlus size={16} />
+                                Confirm Invite
                             </>
                         )}
                     </button>

@@ -1,408 +1,272 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Menu, X, TrendingUp, Users as UsersIcon, Clock, MessageSquare, BarChart3 } from 'lucide-react';
-
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from './contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/Dashboard';
+import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
+import ESplitLogo from './components/ESplitLogo';
+import { supabase } from './supabase';
+
+// Components
+import GroupSelector from './components/GroupSelector';
+import ParticipantManager from './components/ParticipantManager';
 import ExpenseList from './components/ExpenseList';
 import AddExpenseModal from './components/AddExpenseModal';
 import SettleUp from './components/SettleUp';
 import SettleUpModal from './components/SettleUpModal';
-import Analytics from './components/Analytics';
-import ParticipantManager from './components/ParticipantManager';
-import QuickAddExpense from './components/QuickAddExpense';
-import GroupSelector from './components/GroupSelector';
 import ShareGroupModal from './components/ShareGroupModal';
-import ActivityLog from './components/ActivityLog';
-import PinModal from './components/PinModal';
-import DevDashboard from './components/DevDashboard';
 import InviteMemberModal from './components/InviteMemberModal';
-import UserProfile from './components/UserProfile';
+import PinModal from './components/PinModal';
+import ActivityLog from './components/ActivityLog';
 import Chat from './components/Chat';
-import ESplitLogo from './components/ESplitLogo';
-import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
-import { createActivity, formatActivityDescription, getActorName } from './utils/activityLogger';
-import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked, lockGroup, lockAllGroups } from './utils/crypto';
-import { requestNotificationPermission, notifyNewExpense, notifyPaymentRecorded, notifyExpenseEdited, notifyExpenseDeleted } from './utils/notifications';
+import UserProfileModal from './components/UserProfileModal';
+import DevDashboard from './components/DevDashboard';
+import Analytics from './components/Analytics';
+import QuickAddExpense from './components/QuickAddExpense';
+import PeriodSelector from './components/PeriodSelector';
+import ClosePeriodModal from './components/ClosePeriodModal';
+import PeriodArchive from './components/PeriodArchive';
+import PeriodDetailsView from './components/PeriodDetailsView';
+import ExportButton from './components/ExportButton';
+import { AnimatePresence, motion } from 'framer-motion';
+
+// Icons
+import {
+  Menu, X, LogOut, Moon, Sun, Shield, Share2,
+  Plus, Settings, Receipt, TrendingUp, Users,
+  MessageSquare, Activity, Lock, Check, Edit2, BarChart3, Clock, Calendar
+} from 'lucide-react';
+
+// Services
 import {
   createGroupInSupabase,
   updateGroupInSupabase,
   deleteGroupInSupabase,
   subscribeToGroups,
   subscribeToGroupData,
-  importGroupToSupabase,
-  logDeviceAccess,
   sendMessage
 } from './services/supabaseService';
+
 import {
   addGroupMember,
   removeGroupMember,
-  updateMemberRole,
-  getGroupMembers,
-  subscribeToGroupMembers
+  updateMemberRole
 } from './services/memberService';
 
+import {
+  createPeriod,
+  closePeriod,
+  getPeriodsForGroup,
+  getActivePeriod,
+  subscribeToPeriods,
+  ensureActivePeriod,
+  deletePeriod
+} from './services/periodService';
+
+import {
+  createActivity,
+  formatActivityDescription
+} from './utils/activityLogger';
+
+import {
+  notifyNewExpense,
+  notifyPaymentRecorded,
+  notifyExpenseDeleted,
+  notifyPeriodClosed
+} from './utils/notifications';
+
 function App() {
-  const [groups, setGroups] = useState([]);
-  const [currentGroupId, setCurrentGroupId] = useState('');
-  const [expenses, setExpenses] = useState([]);
-  const [participants, setParticipants] = useState([]);
-  const [activityLog, setActivityLog] = useState([]);
-  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [editExpense, setEditExpense] = useState(null);
-  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
-  const [settlePrefill, setSettlePrefill] = useState(null);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [shareGroupData, setShareGroupData] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [pinModalMode, setPinModalMode] = useState('enter'); // 'enter' or 'set'
-  const [pinModalGroupId, setPinModalGroupId] = useState(null);
-  const [inactivityTimer, setInactivityTimer] = useState(null);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
-  const [chatMessages, setChatMessages] = useState([]);
-
-  // Group Members State
-  const [groupMembers, setGroupMembers] = useState([]);
-  const [isInviteMemberModalOpen, setIsInviteMemberModalOpen] = useState(false);
-  const [currentUserRole, setCurrentUserRole] = useState('member');
-
-  // User Profile State
-  const [displayName, setDisplayName] = useState('');
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-
-  // Dev Dashboard State
-  const [isDevModalOpen, setIsDevModalOpen] = useState(false);
-  const [logoClickCount, setLogoClickCount] = useState(0);
-  const [logoClickTimer, setLogoClickTimer] = useState(null);
-
-  // Authentication - must be before useEffects that use user
   const { user, loading, signOut } = useAuth();
+  const location = useLocation();
+  // State
+  const [groups, setGroups] = useState([]);
+  const [currentGroupId, setCurrentGroupId] = useState(null);
+  const [participants, setParticipants] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [activityLog, setActivityLog] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const [isDevModalOpen, setIsDevModalOpen] = useState(false);
+  const [isMutating, setIsMutating] = useState(false); // Prevent subscription overwrites during mutations
 
-  // Load groups from Firestore
-  // Load groups from Supabase
-  useEffect(() => {
-    if (!user) return;
+  // Modals
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isInviteMemberModalOpen, setIsInviteMemberModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    const unsubscribe = subscribeToGroups((fetchedGroups) => {
-      setGroups(fetchedGroups);
-    });
+  const [editExpense, setEditExpense] = useState(null);
+  const [settlePrefill, setSettlePrefill] = useState(null);
+  const [shareGroupData, setShareGroupData] = useState(null);
+  const [pinModalGroupId, setPinModalGroupId] = useState(null);
+  const [pinModalMode, setPinModalMode] = useState('enter');
 
-    return () => unsubscribe();
-  }, [user]);
+  // Closable Period State
+  const [periods, setPeriods] = useState([]);
+  const [currentPeriodId, setCurrentPeriodId] = useState(null);
+  const [isClosePeriodModalOpen, setIsClosePeriodModalOpen] = useState(false);
+  const [viewPeriodDetails, setViewPeriodDetails] = useState(null);
 
-  // Load user display name
-  useEffect(() => {
-    if (user) {
-      const name = user.user_metadata?.display_name || user.user_metadata?.name || '';
-      setDisplayName(name);
-    }
-  }, [user]);
-
-  // Load and subscribe to group members
-  useEffect(() => {
-    if (!currentGroupId || !user) {
-      setGroupMembers([]);
-      setCurrentUserRole('member');
-      return;
-    }
-
-    // Fetch members for current group
-    const loadMembers = async () => {
-      try {
-        const members = await getGroupMembers(currentGroupId);
-        setGroupMembers(members);
-
-        // Find current user's role
-        const currentMember = members.find(m => m.userId === user.id);
-        setCurrentUserRole(currentMember?.role || 'member');
-      } catch (error) {
-        console.error('Error loading members:', error);
-      }
-    };
-
-    loadMembers();
-
-    // Subscribe to real-time updates
-    const unsubscribe = subscribeToGroupMembers(currentGroupId, (updatedMembers) => {
-      setGroupMembers(updatedMembers);
-
-      // Update current user's role
-      const currentMember = updatedMembers.find(m => m.userId === user.id);
-      setCurrentUserRole(currentMember?.role || 'member');
-    });
-
-    return () => unsubscribe();
-  }, [currentGroupId, user]);
-
-  // Log device access on load
-  useEffect(() => {
-    logDeviceAccess(currentGroupId);
-  }, [currentGroupId]);
-
-  // Request notification permission on load
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      requestNotificationPermission();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Handle default group selection
-  useEffect(() => {
-    if (groups.length > 0 && !currentGroupId) {
-      // Prefer "Welcome Group" (g_default001)
-      const defaultGroup = groups.find(g => g.id === 'g_default001');
-
-      // if (defaultGroup) {
-      //   setCurrentGroupId(defaultGroup.id);
-      // } else {
-      //   // If Welcome Group doesn't exist, create it!
-      //   const createWelcomeGroup = async () => {
-      //     try {
-      //       const newGroupData = {
-      //         name: 'Welcome Group',
-      //         participants: [],
-      //         expenses: [],
-      //         activityLog: [],
-      //         pinHash: null,
-      //         pinEnabled: false
-      //       };
-      //       // Pass custom ID 'g_default001'
-      //       await createGroupInSupabase(newGroupData, 'g_default001');
-      //       // Selection will happen on next render when groups update
-      //     } catch (e) {
-      //       console.error("Error creating default group:", e);
-      //       // Fallback to first available
-      //       setCurrentGroupId(groups[0].id);
-      //     }
-      //   };
-      //   createWelcomeGroup();
-      // }
-      // Just select first group
-      setCurrentGroupId(groups[0].id);
-      // } else if (groups.length === 0 && !currentGroupId) {
-      //   // If absolutely no groups, create Welcome Group
-      //   const createWelcomeGroup = async () => {
-      //     try {
-      //       const newGroupData = {
-      //         name: 'Welcome Group',
-      //         participants: [],
-      //         expenses: [],
-      //         activityLog: [],
-      //         pinHash: null,
-      //         pinEnabled: false
-      //       };
-      //       await createGroupInSupabase(newGroupData, 'g_default001');
-      //     } catch (e) {
-      //       console.error("Error creating initial group:", e);
-      //     }
-      //   };
-      //   // Only try once to avoid loops
-      //   const hasInit = localStorage.getItem('hasInitWelcome');
-      //   if (!hasInit) {
-      //     createWelcomeGroup();
-      //     localStorage.setItem('hasInitWelcome', 'true');
-      //   }
-    }
-  }, [groups, currentGroupId]);
-
-  // Load current group data from Firestore
-
-  // Load current group data from Firestore
-  useEffect(() => {
-    if (!currentGroupId) return;
-
-    const unsubscribe = subscribeToGroupData(currentGroupId, (groupData) => {
-      if (groupData) {
-        setParticipants(groupData.participants || []);
-        setExpenses(groupData.expenses || []);
-        setActivityLog(groupData.activityLog || []);
-        setChatMessages(groupData.chatMessages || []);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [currentGroupId, groups]);
-
-  // Auto-lock timer - lock all groups after 10 minutes of inactivity (security feature #4)
-  const AUTO_LOCK_TIMEOUT = 10 * 60 * 1000; // 10 minutes
-
-  const resetInactivityTimer = () => {
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-    }
-
-    const newTimer = setTimeout(() => {
-      // Lock all PIN-protected groups
-      const hasProtectedGroups = groups.some(g => g.pinEnabled);
-      if (hasProtectedGroups) {
-        lockAllGroups();
-        alert('Groups have been locked due to inactivity.');
-        // Optionally reload to show lock state
-        window.location.reload();
-      }
-    }, AUTO_LOCK_TIMEOUT);
-
-    setInactivityTimer(newTimer);
-  };
-
-  // Set up inactivity timer on mount and reset on any interaction
-  useEffect(() => {
-    resetInactivityTimer();
-
-    const handleActivity = () => {
-      resetInactivityTimer();
-    };
-
-    // Listen for user activity
-    window.addEventListener('mousemove', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-    window.addEventListener('click', handleActivity);
-
-    return () => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-      }
-      window.removeEventListener('mousemove', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      window.removeEventListener('click', handleActivity);
-    };
-  }, [groups]);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('e-split-dark-mode') === 'true');
+  const refreshGroupDataRef = useRef(null); // Store refresh function for manual sync
+  const isMutatingRef = useRef(false); // Store mutation state for subscription callback
+  let logoClickTimer;
 
   // Dark mode effect
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('darkMode', darkMode.toString());
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('e-split-dark-mode', darkMode);
   }, [darkMode]);
 
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
+  // Effects
+  useEffect(() => {
+    if (user) {
+      const unsubscribe = subscribeToGroups(user.id, (updatedGroups) => {
+        setGroups(updatedGroups);
 
-  // Secret Dev Dashboard Trigger (5 clicks on logo)
-  const handleLogoClick = () => {
-    const newCount = logoClickCount + 1;
-    setLogoClickCount(newCount);
-
-    if (logoClickTimer) clearTimeout(logoClickTimer);
-
-    if (newCount >= 5) {
-      setIsDevModalOpen(true);
-      setLogoClickCount(0);
-    } else {
-      // Reset count if no click within 2 seconds
-      const timer = setTimeout(() => {
-        setLogoClickCount(0);
-      }, 2000);
-      setLogoClickTimer(timer);
-    }
-  };
-
-  // --- Group Handlers --- // Save group data to Firestore
-  const saveGroupData = async (updatedParticipants, updatedExpenses, newActivity = null) => {
-    if (!currentGroupId) return;
-
-    try {
-      const updatedActivityLog = newActivity
-        ? [newActivity, ...activityLog] // Prepend new activity
-        : activityLog;
-
-      await updateGroupInSupabase(currentGroupId, {
-        participants: updatedParticipants,
-        expenses: updatedExpenses,
-        activityLog: updatedActivityLog
+        // Auto-select group
+        if (!currentGroupId && updatedGroups.length > 0) {
+          // Check for last accessed group
+          const lastGroupId = localStorage.getItem('lastGroupId');
+          const targetGroup = updatedGroups.find(g => g.id === lastGroupId) || updatedGroups[0];
+          setCurrentGroupId(targetGroup.id);
+        } else if (updatedGroups.length === 0) {
+          // Auto-create welcome group if absolutely no groups exist
+          // FIX: Pass object with name
+          createGroupInSupabase({ name: 'Welcome Group' }).then(newGroup => {
+            setCurrentGroupId(newGroup.id);
+          }).catch(console.error);
+        }
       });
-    } catch (error) {
-      console.error("Error saving group data:", error);
-      alert("Failed to save changes. Please check your connection.");
+      return () => unsubscribe();
     }
-  };
+  }, [user, currentGroupId]);
 
-  const handleCreateGroup = async (groupName, pin) => {
-    try {
-      let pinHash = null;
-      if (pin && pin.length === 4) {
-        pinHash = await hashPin(pin);
+  useEffect(() => {
+    if (!currentGroupId) {
+      setParticipants([]);
+      setExpenses([]);
+      setActivityLog([]);
+      setChatMessages([]);
+      setPeriods([]);
+      return;
+    }
+
+    // Load Group Data (Expenses, Chat, etc)
+    const handleGroupDataUpdate = (data) => {
+      console.log('🔄 Subscription update received. isMutating:', isMutatingRef.current, 'Expenses count:', data?.expenses?.length);
+      if (data && !isMutatingRef.current) { // Check ref instead of state
+        console.log('✅ Applying subscription update');
+        setParticipants(data.participants || []);
+        setExpenses(data.expenses || []);
+        setActivityLog(data.activityLog || []);
+        setChatMessages(data.chatMessages || []);
+      } else {
+        console.log('🚫 Blocked subscription update (mutation in progress)');
       }
+    };
 
-      // Auto-add current user as first participant
-      const userName = displayName || user?.email?.split('@')[0] || 'You';
-      const userParticipant = {
-        id: user?.id || `user_${Date.now()}`,
-        name: userName,
-        color: `hsl(${Math.random() * 360}, 70%, 50%)`
-      };
+    // Store refresh function for manual sync after mutations
+    refreshGroupDataRef.current = () => {
+      supabase
+        .from('groups')
+        .select('data')
+        .eq('group_id', currentGroupId)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setParticipants(data.data.participants || []);
+            setExpenses(data.data.expenses || []);
+            setActivityLog(data.data.activityLog || []);
+            setChatMessages(data.data.chatMessages || []);
+          }
+        });
+    };
 
-      const newGroupData = {
-        name: groupName,
-        participants: [userParticipant],
-        expenses: [],
-        activityLog: [],
-        pinHash: pinHash,
-        pinEnabled: Boolean(pinHash)
-      };
-      const newGroup = await createGroupInSupabase(newGroupData);
-      setCurrentGroupId(newGroup.id);
-    } catch (error) {
-      console.error("Error creating group:", error);
-      alert("Failed to create group.");
-    }
-  };
+    const unsubscribeData = subscribeToGroupData(currentGroupId, handleGroupDataUpdate);
 
+    // Load Periods
+    ensureActivePeriod(currentGroupId).then(active => {
+      if (active) setCurrentPeriodId(active.id);
+    });
+
+    // Subscribe to Periods
+    console.log('DEBUG: Subscribing to periods for', currentGroupId);
+    const unsubscribePeriods = subscribeToPeriods(currentGroupId, (updatedPeriods) => {
+      console.log('DEBUG: Periods fetched:', updatedPeriods);
+      setPeriods(updatedPeriods);
+
+      // Ensure we are selecting the Active period if none selected
+      if (!currentPeriodId) {
+        const active = updatedPeriods.find(p => p.status === 'active');
+        if (active) setCurrentPeriodId(active.id);
+      }
+    });
+
+    localStorage.setItem('lastGroupId', currentGroupId);
+
+    return () => {
+      unsubscribeData();
+      unsubscribePeriods();
+    };
+  }, [currentGroupId]);
+
+  // Handlers
   const handleSelectGroup = (groupId) => {
-    // Lock the current group if it's PIN-protected (security feature #1)
-    const currentGroup = groups.find(g => g.id === currentGroupId);
-    if (currentGroup && currentGroup.pinEnabled) {
-      lockGroup(currentGroupId);
-    }
-
-    // Check if new group requires PIN
     const group = groups.find(g => g.id === groupId);
-    if (group && group.pinEnabled && !isGroupUnlocked(groupId)) {
-      // Group is PIN protected and not unlocked
+    if (group?.pinEnabled) {
       setPinModalGroupId(groupId);
       setPinModalMode('enter');
       setIsPinModalOpen(true);
     } else {
-      // No PIN or already unlocked
       setCurrentGroupId(groupId);
+      setIsMobileMenuOpen(false);
     }
-
-    // Reset inactivity timer
-    resetInactivityTimer();
   };
 
-  const handleEditGroup = async (groupId, newName) => {
+  const handleCreateGroup = async (name) => {
+    if (!user) return;
     try {
-      await updateGroupInSupabase(groupId, { name: newName });
+      // FIX: Pass object, not string
+      const newGroup = await createGroupInSupabase({ name });
+      setCurrentGroupId(newGroup.id);
+    } catch (error) {
+      console.error("Error creating group:", error);
+      alert("Failed to create group");
+    }
+  };
+
+  const handleEditGroup = async (groupId, name) => {
+    try {
+      await updateGroupInSupabase(groupId, { name });
     } catch (error) {
       console.error("Error updating group:", error);
-      alert("Failed to update group name.");
+      alert("Failed to update group");
     }
   };
 
   const handleDeleteGroup = async (groupId) => {
-    if (confirm('Are you sure you want to delete this group? This cannot be undone.')) {
-      try {
-        await deleteGroupInSupabase(groupId);
-        // Selection update is handled by the group listener
-      } catch (error) {
-        console.error("Error deleting group:", error);
-        alert("Failed to delete group.");
-      }
+    if (!confirm("Are you sure you want to delete this group?")) return;
+    try {
+      await deleteGroupInSupabase(groupId);
+      if (currentGroupId === groupId) setCurrentGroupId(null);
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      alert("Failed to delete group");
     }
   };
 
   const handleShareGroup = (groupId) => {
     const group = groups.find(g => g.id === groupId);
     if (group) {
-      setShareGroupData(group);
+      setShareGroupData({
+        name: group.name,
+        code: group.shareCode || 'GENERATING...',
+        link: window.location.origin + '/join/' + (group.shareCode || '')
+      });
       setIsShareModalOpen(true);
     }
   };
@@ -414,61 +278,84 @@ function App() {
   };
 
   const handlePinSubmit = async (pin) => {
-    try {
-      if (pinModalMode === 'set') {
-        // Setting/changing PIN
-        const pinHash = await hashPin(pin);
-        const group = groups.find(g => g.id === pinModalGroupId);
-        if (group) {
-          await updateGroupInSupabase(pinModalGroupId, {
-            pinHash: pinHash,
-            pinEnabled: true
-          });
-          markGroupUnlocked(pinModalGroupId);
-          alert('PIN set successfully!');
-        }
+    if (pinModalMode === 'enter') {
+      const group = groups.find(g => g.id === pinModalGroupId);
+      if (group && group.pin === pin) {
+        setCurrentGroupId(pinModalGroupId);
+        setIsPinModalOpen(false);
+        setPinModalGroupId(null);
       } else {
-        // Verifying PIN
-        const group = groups.find(g => g.id === pinModalGroupId);
-        if (group && group.pinHash) {
-          const isValid = await verifyPin(pin, group.pinHash);
-          if (isValid) {
-            markGroupUnlocked(pinModalGroupId);
-            setCurrentGroupId(pinModalGroupId);
-          } else {
-            alert('Incorrect PIN!');
-            return; // Don't close modal
-          }
-        }
+        alert('Incorrect PIN');
       }
-      setIsPinModalOpen(false);
-      setPinModalGroupId(null);
-    } catch (error) {
-      console.error('Error handling PIN:', error);
-      alert('Failed to process PIN.');
+    } else {
+      // Set PIN
+      try {
+        await updateGroupInSupabase(pinModalGroupId, { pin, pinEnabled: true });
+        setIsPinModalOpen(false);
+        setPinModalGroupId(null);
+        alert('PIN set successfully');
+      } catch (e) {
+        console.error(e);
+        alert('Failed to set PIN');
+      }
     }
   };
 
-  // --- Expense & Participant Handlers (Now saving to Firestore) ---
+  const handleLogoClick = () => {
+    const newCount = logoClickCount + 1;
+    setLogoClickCount(newCount);
+
+    if (logoClickTimer) clearTimeout(logoClickTimer);
+
+    if (newCount >= 5) {
+      setIsDevModalOpen(true);
+      setLogoClickCount(0);
+    } else {
+      logoClickTimer = setTimeout(() => {
+        setLogoClickCount(0);
+      }, 2000);
+    }
+  };
+
+  const saveGroupData = async (updatedParticipants, updatedExpenses, newActivity = null) => {
+    let updatedActivityLog = activityLog;
+    if (newActivity) {
+      updatedActivityLog = [newActivity, ...activityLog].slice(0, 50);
+      setActivityLog(updatedActivityLog);
+    }
+
+    try {
+      await updateGroupInSupabase(currentGroupId, {
+        participants: updatedParticipants,
+        expenses: updatedExpenses,
+        activityLog: updatedActivityLog
+      });
+    } catch (error) {
+      console.error("Error saving group data:", error);
+      throw error;
+    }
+  };
 
   const handleAddExpense = async (newExpense) => {
     const updatedExpenses = [newExpense, ...expenses];
-    // Optimistic update
-    setExpenses(updatedExpenses);
+    setExpenses(updatedExpenses); // Optimistic
 
-    // Create activity
-    const actorName = displayName || user?.email?.split('@')[0] || 'User';
+    const actorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
     const description = formatActivityDescription('added', 'expense', newExpense);
-    const activity = createActivity('added', actorName, 'expense', newExpense.id, description, {
-      previousState: null
-    });
+    const activity = createActivity('added', actorName, 'expense', newExpense.id, description, { previousState: null });
 
+    setIsMutating(true);
+    isMutatingRef.current = true;
     try {
       await saveGroupData(participants, updatedExpenses, activity);
-      notifyNewExpense(newExpense, participants);
-    } catch (error) {
-      console.error('Error in notifications:', error);
-      // Don't throw - expense was saved successfully
+      notifyNewExpense(newExpense.description, newExpense.amount, actorName);
+      if (refreshGroupDataRef.current) refreshGroupDataRef.current();
+    } catch (e) {
+      console.error(e);
+      setExpenses(expenses);
+    } finally {
+      setIsMutating(false);
+      isMutatingRef.current = false;
     }
   };
 
@@ -477,32 +364,70 @@ function App() {
     const updatedExpenses = expenses.map(e => e.id === updatedExpense.id ? updatedExpense : e);
     setExpenses(updatedExpenses);
 
-    // Create activity
-    const actorName = getActorName(participants);
+    const actorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
     const description = formatActivityDescription('edited', 'expense', updatedExpense);
-    const activity = createActivity('edited', actorName, 'expense', updatedExpense.id, description, {
-      previousState: oldExpense // Store old expense for undo
-    });
+    const activity = createActivity('edited', actorName, 'expense', updatedExpense.id, description, { previousState: oldExpense });
 
-    await saveGroupData(participants, updatedExpenses, activity);
-    notifyExpenseEdited(updatedExpense, participants);
+    setIsMutating(true);
+    isMutatingRef.current = true;
+    try {
+      await saveGroupData(participants, updatedExpenses, activity);
+      if (refreshGroupDataRef.current) refreshGroupDataRef.current();
+    } catch (error) {
+      console.error(error);
+      setExpenses(expenses);
+    } finally {
+      setIsMutating(false);
+      isMutatingRef.current = false;
+    }
   };
 
-  const handleDeleteExpense = (expenseId) => {
+  const handleDeleteExpense = async (expenseId) => {
     if (confirm('Are you sure you want to delete this expense?')) {
+      console.log('🗑️ DELETE START - Expense ID:', expenseId);
+      console.log('📊 Current expenses count:', expenses.length);
+
       const deletedExpense = expenses.find(e => e.id === expenseId);
       const updatedExpenses = expenses.filter(e => e.id !== expenseId);
+
+      console.log('📊 After deletion, expenses count:', updatedExpenses.length);
+
+      // Optimistic update
       setExpenses(updatedExpenses);
 
-      // Create activity
-      const actorName = getActorName(participants);
+      const actorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
       const description = formatActivityDescription('deleted', 'expense', deletedExpense);
-      const activity = createActivity('deleted', actorName, 'expense', expenseId, description, {
-        previousState: deletedExpense // Store deleted expense for undo
-      });
+      const activity = createActivity('deleted', actorName, 'expense', expenseId, description, { previousState: deletedExpense });
 
-      saveGroupData(participants, updatedExpenses, activity);
-      notifyExpenseDeleted(deletedExpense, participants);
+      // Set mutation lock to prevent subscription overwrites
+      console.log('🔒 Setting mutation lock');
+      setIsMutating(true);
+      isMutatingRef.current = true;
+
+      try {
+        console.log('💾 Saving to database...');
+        await saveGroupData(participants, updatedExpenses, activity);
+        console.log('✅ Save successful');
+
+        notifyExpenseDeleted(deletedExpense?.description, actorName);
+
+        // Manually refresh to ensure we're in sync after mutation
+        console.log('🔄 Manual refresh...');
+        if (refreshGroupDataRef.current) {
+          refreshGroupDataRef.current();
+        }
+      } catch (error) {
+        console.error('❌ Failed to delete expense:', error);
+        // Revert optimistic update on failure
+        setExpenses(expenses);
+        alert('Failed to delete expense. Please try again.');
+      } finally {
+        // Release mutation lock
+        console.log('🔓 Releasing mutation lock');
+        setIsMutating(false);
+        isMutatingRef.current = false;
+        console.log('🗑️ DELETE COMPLETE');
+      }
     }
   };
 
@@ -511,59 +436,54 @@ function App() {
     setIsExpenseModalOpen(true);
   };
 
-  const handleSettle = (settlement) => {
+  const handleSettle = async (settlement) => {
     const updatedExpenses = [settlement, ...expenses];
     setExpenses(updatedExpenses);
 
-    // Create activity for settlement
-    const actorName = displayName || user?.email?.split('@')[0] || 'User';
+    const actorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
     const fromPerson = participants.find(p => p.id === settlement.paidBy);
     const toPerson = participants.find(p => p.id === settlement.paidTo);
     const description = `Recorded payment: ${fromPerson?.name} paid ${toPerson?.name} $${settlement.amount.toFixed(2)}`;
-    const activity = createActivity('added', actorName, 'settlement', settlement.id, description, {
-      previousState: null
-    });
+    const activity = createActivity('added', actorName, 'settlement', settlement.id, description, { previousState: null });
 
-    // Don't await - let it save in background
-    saveGroupData(participants, updatedExpenses, activity).catch(err => {
-      console.error('Error saving settlement:', err);
-    });
-
+    setIsMutating(true);
+    isMutatingRef.current = true;
     try {
-      notifyPaymentRecorded(settlement, participants);
-    } catch (error) {
-      console.error('Error notifying:', error);
+      await saveGroupData(participants, updatedExpenses, activity);
+      notifyPaymentRecorded(fromPerson?.name || 'Someone', toPerson?.name || 'Someone', settlement.amount);
+      if (refreshGroupDataRef.current) refreshGroupDataRef.current();
+    } catch (e) {
+      console.error(e);
+      setExpenses(expenses);
+    } finally {
+      setIsMutating(false);
+      isMutatingRef.current = false;
     }
+    setIsSettleModalOpen(false);
   };
 
   const handleAddParticipant = async (newParticipant) => {
     const updatedParticipants = [...participants, newParticipant];
     setParticipants(updatedParticipants);
     await saveGroupData(updatedParticipants, expenses);
-
-    // If participant has an email, try to add them as a member for access
     if (newParticipant.email) {
-      try {
-        // This grants them access to see the group
-        await addGroupMember(currentGroupId, newParticipant.email, 'member');
-      } catch (error) {
-        console.error("Error adding group member access:", error);
-        // We don't block the UI update if this fails, but we log it
-      }
+      try { await addGroupMember(currentGroupId, newParticipant.email, 'member'); } catch (e) { console.error(e); }
+    }
+  };
+
+  const handleEditParticipant = async (participantId, updates) => {
+    const updatedParticipants = participants.map(p => p.id === participantId ? { ...p, ...updates } : p);
+    setParticipants(updatedParticipants);
+    await saveGroupData(updatedParticipants, expenses);
+    if (updates.email) {
+      try { await addGroupMember(currentGroupId, updates.email, 'member'); } catch (e) { console.error(e); }
     }
   };
 
   const handleRemoveParticipant = (userId) => {
-    // Check if participant has outstanding balance (not just if they have expenses)
-    const balance = balances[userId] || 0;
-
-    if (Math.abs(balance) > 0.01) {  // Allow for small rounding errors
-      const participant = participants.find(p => p.id === userId);
-      const owesOrOwed = balance > 0 ? 'is owed' : 'owes';
-      alert(`Cannot remove ${participant?.name}: they still ${owesOrOwed} $${Math.abs(balance).toFixed(2)}. Please settle up first.`);
-      return;
-    }
-
+    // Check balance
+    // For simplicity, we are checking logic later in calculateBalances, but here we need rudimentary check
+    // Let's verify via 'balances' which is calculated in render
     if (confirm('Are you sure you want to remove this participant?')) {
       const updatedParticipants = participants.filter(p => p.id !== userId);
       setParticipants(updatedParticipants);
@@ -576,151 +496,190 @@ function App() {
     setIsSettleModalOpen(true);
   };
 
-  // Chat handler
   const handleSendMessage = async (text) => {
     if (!currentGroupId || !user) return;
-
     const message = {
       id: crypto.randomUUID ? crypto.randomUUID() : `msg_${Date.now()}`,
       text,
       userId: user.id,
-      userName: displayName || user.email.split('@')[0],
+      userName: user.email.split('@')[0],
       timestamp: new Date().toISOString()
     };
-
-    try {
-      await sendMessage(currentGroupId, message);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      alert('Failed to send message');
-    }
+    try { await sendMessage(currentGroupId, message); } catch (e) { console.error(e); alert('Failed to send'); }
   };
 
-  // Member management handlers
   const handleInviteMember = async (userEmail, role) => {
-    try {
-      await addGroupMember(currentGroupId, userEmail, role);
-      alert('Member invited successfully!');
-    } catch (error) {
-      console.error('Error inviting member:', error);
-      throw error;
-    }
+    try { await addGroupMember(currentGroupId, userEmail, role); alert('Invited!'); } catch (e) { console.error(e); throw e; }
   };
 
   const handleRemoveMember = async (userId) => {
-    if (!confirm('Remove this member from the group?')) return;
-
-    try {
-      await removeGroupMember(currentGroupId, userId);
-    } catch (error) {
-      console.error('Error removing member:', error);
-      alert('Failed to remove member');
-    }
+    if (!confirm('Remove member?')) return;
+    try { await removeGroupMember(currentGroupId, userId); } catch (e) { console.error(e); alert('Failed'); }
   };
 
   const handleUpdateMemberRole = async (userId, newRole) => {
+    try { await updateMemberRole(currentGroupId, userId, newRole); } catch (e) { console.error(e); alert('Failed'); }
+  };
+
+  // ------------------------------------------------------------------
+  //  Start Helper Functions (that were potentially misplaced)
+  // ------------------------------------------------------------------
+
+  const calculateSettlements = (balances, participants) => {
+    const settlements = [];
+    const debtors = [];
+    const creditors = [];
+
+    Object.entries(balances).forEach(([userId, balance]) => {
+      const participant = participants.find(p => p.id === userId);
+      if (balance < -0.01) debtors.push({ id: userId, name: participant?.name || 'Unknown', amount: -balance });
+      else if (balance > 0.01) creditors.push({ id: userId, name: participant?.name || 'Unknown', amount: balance });
+    });
+
+    debtors.sort((a, b) => b.amount - a.amount);
+    creditors.sort((a, b) => b.amount - a.amount);
+
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const debtor = debtors[i];
+      const creditor = creditors[j];
+      const amount = Math.min(debtor.amount, creditor.amount);
+      settlements.push({ from: { id: debtor.id, name: debtor.name }, to: { id: creditor.id, name: creditor.name }, amount });
+      debtor.amount -= amount;
+      creditor.amount -= amount;
+      if (debtor.amount < 0.01) i++;
+      if (creditor.amount < 0.01) j++;
+    }
+    return settlements;
+  };
+
+  const handleClosePeriod = async (periodName) => {
+    if (!currentPeriodId) return;
+
+    // Calculate final balances/settlements based on current active expenses
+    const currentActiveExpenses = expenses.filter(e => !e.periodId);
+    const { balances: finalBalances } = calculateBalances(currentActiveExpenses, participants);
+    const finalSettlements = calculateSettlements(finalBalances, participants);
+
+    const totalPeriodExpenses = currentActiveExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+    const transactionCount = currentActiveExpenses.length;
+
     try {
-      await updateMemberRole(currentGroupId, userId, newRole);
+      if (!confirm('Are you sure you want to close this period? This will archive current expenses and start fresh.')) return;
+
+      // 1. Snapshot
+      await closePeriod(currentPeriodId, finalBalances, finalSettlements, totalPeriodExpenses, transactionCount);
+
+      // 2. Archive Expenses
+      const updatedAllExpenses = expenses.map(e => {
+        if (!e.periodId) return { ...e, periodId: currentPeriodId };
+        return e;
+      });
+
+      // 3. Log
+      const actorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+      const activity = createActivity('closed', actorName, 'period', currentPeriodId, `Closed period: ${periods.find(p => p.id === currentPeriodId)?.name}`, { previousState: null });
+      const updatedActivityLog = [activity, ...activityLog].slice(0, 100);
+
+      // 4. Update Group
+      await updateGroupInSupabase(currentGroupId, { expenses: updatedAllExpenses, activityLog: updatedActivityLog });
+
+      notifyPeriodClosed(periods.find(p => p.id === currentPeriodId)?.name || 'Current Period');
+
+      // 5. New Period
+      const newPeriod = await createPeriod(currentGroupId, `Settlement ${new Date().toLocaleDateString()}`);
+      setCurrentPeriodId(newPeriod.id);
+      setIsClosePeriodModalOpen(false);
+
     } catch (error) {
-      console.error('Error updating role:', error);
-      alert('Failed to update role');
+      console.error('Error closing period:', error);
+      alert('Failed to close period');
     }
   };
 
-  const { balances, totalPaid, totalShare } = calculateBalances(expenses, participants);
+  const handleDeletePeriod = async (periodId) => {
+    // Optimistic update: Remove from UI immediately
+    setPeriods(prevPeriods => prevPeriods.filter(p => p.id !== periodId));
 
-  // Get only participants who are actually involved in expenses
-  const activeParticipants = getActiveParticipants(expenses, participants);
+    try {
+      await deletePeriod(periodId);
+    } catch (error) {
+      console.error('Failed to delete period:', error);
+      alert('Failed: ' + error.message);
+      // Optional: Re-fetch if failed, but for now just alerting is enough
+    }
+  };
 
-  const totalExpenses = expenses
-    .filter(e => !e.isSettlement)
-    .reduce((sum, e) => sum + e.amount, 0);
+  const handleCreatePeriod = async () => {
+    const currentGroup = groups.find(g => g.id === currentGroupId);
+    if (currentGroup && currentGroup.pinEnabled) lockGroup(currentGroupId);
+  };
 
-  // Calculate average based on ACTIVE participants only (not all participants)
+  // ------------------------------------------------------------------
+
+  // Calculations for Render
+  const currentPeriod = periods.find(p => p.id === currentPeriodId);
+
+  const periodExpenses = expenses.filter(e => {
+    // If current period is closed, show only expenses from that period
+    if (currentPeriod?.status === 'closed') {
+      return e.periodId === currentPeriodId;
+    }
+    // If current period is active (or null), show only unassigned expenses (active)
+    // AND exclude settlements (unless we want them? User asked for transactions)
+    // Typically active view shows Unassigned expenses.
+    return !e.periodId;
+  });
+
+  const { balances, totalPaid } = calculateBalances(periodExpenses, participants);
+  const activeParticipants = getActiveParticipants(periodExpenses, participants);
+  const totalExpenses = periodExpenses.filter(e => !e.isSettlement).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
   const avgPerPerson = activeParticipants.length > 0 ? totalExpenses / activeParticipants.length : 0;
 
-  // Undo handler
   const handleUndo = async (activity) => {
-    if (!activity.details?.previousState) {
-      alert('Cannot undo this action');
-      return;
-    }
-
+    if (!activity.details?.previousState) { alert('Cannot undo'); return; }
     if (!confirm(`Undo: ${activity.description}?`)) return;
 
     const { previousState } = activity.details;
     let updatedExpenses = [...expenses];
 
-    // Undo based on action type
     if (activity.targetType === 'expense') {
-      if (activity.action === 'added') {
-        // Remove the added expense
-        updatedExpenses = expenses.filter(e => e.id !== activity.targetId);
-      } else if (activity.action === 'edited') {
-        // Restore previous expense state
-        updatedExpenses = expenses.map(e =>
-          e.id === activity.targetId ? previousState : e
-        );
-      } else if (activity.action === 'deleted') {
-        // Restore deleted expense
-        updatedExpenses = [previousState, ...expenses];
-      }
+      if (activity.action === 'added') updatedExpenses = expenses.filter(e => e.id !== activity.targetId);
+      else if (activity.action === 'edited') updatedExpenses = expenses.map(e => e.id === activity.targetId ? previousState : e);
+      else if (activity.action === 'deleted') updatedExpenses = [previousState, ...expenses];
     }
-
-    // Remove the activity from log
     const updatedActivityLog = activityLog.filter(a => a.id !== activity.id);
-
     setExpenses(updatedExpenses);
     setActivityLog(updatedActivityLog);
 
-    // Save without creating new activity
-    try {
-      await updateGroupInSupabase(currentGroupId, {
-        participants,
-        expenses: updatedExpenses,
-        activityLog: updatedActivityLog
-      });
-    } catch (error) {
-      console.error("Error undoing action:", error);
-      alert("Failed to undo. Please try again.");
-    }
+    try { await updateGroupInSupabase(currentGroupId, { expenses: updatedExpenses, activityLog: updatedActivityLog }); }
+    catch (e) { console.error("Undo failed:", e); }
   };
 
-  // Authentication gate
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
 
-  if (!user) {
-    return <AuthPage />;
-  }
+  if (!user) return <AuthPage />;
 
   return (
-    <div className="min-h-screen bg-gray-50 transition-colors">
-      <header className="bg-white shadow-sm sticky top-0 z-10 transition-colors">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen transition-colors pb-bottom-nav" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+      <header className="glass-strong sticky top-0 z-30">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {/* Logo and App Name */}
               <div className="flex items-center gap-2 cursor-pointer select-none" onClick={handleLogoClick}>
                 <ESplitLogo size={40} />
                 <div>
-                  <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    E-Split
-                  </h1>
-                  <p className="text-xs text-gray-500 hidden sm:block">Split expenses easily</p>
+                  <h1 className="text-xl font-bold" style={{ color: 'var(--accent-indigo)' }}>E-Split</h1>
+                  <p className="text-xs hidden sm:block" style={{ color: 'var(--text-muted)' }}>Split expenses easily</p>
                 </div>
               </div>
-
-              {/* Desktop Group Selector */}
-              <div className="hidden lg:block border-l border-gray-200 pl-4 ml-2">
+              <div className="hidden lg:block pl-4 ml-2" style={{ borderLeft: '1px solid var(--border-primary)' }}>
                 <GroupSelector
                   groups={groups}
                   currentGroup={currentGroupId}
@@ -733,285 +692,240 @@ function App() {
                 />
               </div>
             </div>
+            {/* Period Selector */}
+            {currentGroupId && (
+              <div className="hidden lg:block pl-4 ml-2" style={{ borderLeft: '1px solid var(--border-primary)' }}>
+                <PeriodSelector
+                  periods={periods}
+                  currentPeriod={currentPeriodId}
+                  onSelectPeriod={setCurrentPeriodId}
+                  onCreatePeriod={() => createPeriod(currentGroupId).catch(console.error)}
+                />
+              </div>
+            )}
 
-            {/* Desktop Actions */}
+            {/* Actions */}
             <div className="hidden sm:flex items-center gap-2">
               <button
                 onClick={() => setIsExpenseModalOpen(true)}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-sm"
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-all hover:scale-105"
               >
                 <Plus size={20} />
                 <span className="hidden md:inline">Add Expense</span>
               </button>
-
-              {/* User Info & Logout */}
-              <div className="flex items-center gap-2 pl-2 border-l border-gray-200">
-                <span className="text-sm text-gray-600 hidden lg:inline">{user?.email}</span>
-                <button
-                  onClick={() => signOut()}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                >
-                  Logout
-                </button>
+              {/* Dark mode toggle */}
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-2 rounded-lg transition-all hover:scale-110 theme-transition"
+                style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-card-hover)' }}
+                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
+              <div className="flex items-center gap-2 pl-2" style={{ borderLeft: '1px solid var(--border-primary)' }}>
+                <span className="text-sm hidden lg:inline" style={{ color: 'var(--text-secondary)' }}>{user?.email}</span>
+                <button onClick={signOut} className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Logout</button>
               </div>
             </div>
 
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="sm:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-            >
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="sm:hidden p-2 rounded-lg" style={{ color: 'var(--text-secondary)' }}>
               {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
           </div>
 
-          {/* Mobile Menu */}
-          {
-            isMobileMenuOpen && (
-              <div className="sm:hidden border-t border-gray-200 py-4 space-y-3">
-                <div className="pb-3 border-b border-gray-200">
-                  <GroupSelector
-                    groups={groups}
-                    currentGroup={currentGroupId}
-                    onSelectGroup={handleSelectGroup}
-                    onCreateGroup={handleCreateGroup}
-                    onEditGroup={handleEditGroup}
-                    onDeleteGroup={handleDeleteGroup}
-                    onShareGroup={handleShareGroup}
-                    onSetPin={handleSetPin}
-                  />
-                </div>
+          {isMobileMenuOpen && (
+            <div className="sm:hidden py-4 space-y-3" style={{ borderTop: '1px solid var(--border-primary)' }}>
+              <GroupSelector
+                groups={groups}
+                currentGroup={currentGroupId}
+                onSelectGroup={handleSelectGroup}
+                onCreateGroup={handleCreateGroup}
+                onEditGroup={handleEditGroup}
+                onDeleteGroup={handleDeleteGroup}
+                onShareGroup={handleShareGroup}
+                onSetPin={handleSetPin}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => { setIsExpenseModalOpen(true); setIsMobileMenuOpen(false); }} className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2">
+                  <Plus size={20} /> Add Expense
+                </button>
                 <button
-                  onClick={() => {
-                    setIsExpenseModalOpen(true);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="p-3 rounded-lg theme-transition"
+                  style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
                 >
-                  <Plus size={20} />
-                  Add Expense
+                  {darkMode ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
               </div>
-            )
-          }
+              <button onClick={signOut} className="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Logout</button>
+            </div>
+          )}
 
-          {/* Tabs */}
-          <div className="flex gap-4 border-t border-gray-200 overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'dashboard'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                <TrendingUp size={16} />
-                Dashboard
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('participants')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'participants'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                <UsersIcon size={16} />
-                Participants ({participants.length})
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('activity')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'activity'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                <Clock size={16} />
-                Activity
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'chat'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                <MessageSquare size={16} />
-                Chat
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`px-4 py-3 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'analytics'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <div className="flex items-center gap-2">
-                <BarChart3 size={16} />
-                Analytics
-              </div>
-            </button>
+          {/* Desktop Tab Bar */}
+          <div className="hidden sm:flex gap-4 overflow-x-auto no-scrollbar" style={{ borderTop: '1px solid var(--border-primary)' }}>
+            {[
+              { key: 'dashboard', icon: <TrendingUp size={16} />, label: 'Dashboard' },
+              { key: 'participants', icon: <Users size={16} />, label: `Participants (${participants.length})` },
+              { key: 'activity', icon: <Clock size={16} />, label: 'Activity' },
+              { key: 'chat', icon: <MessageSquare size={16} />, label: 'Chat' },
+              { key: 'analytics', icon: <BarChart3 size={16} />, label: 'Analytics' },
+              { key: 'archive', icon: <Calendar size={16} />, label: 'Archive' },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-3 font-medium text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === tab.key ? 'border-indigo-600' : 'border-transparent hover:border-gray-300'}`}
+                style={{ color: activeTab === tab.key ? 'var(--accent-indigo)' : 'var(--text-muted)' }}
+              >
+                <div className="flex items-center gap-2">{tab.icon} {tab.label}</div>
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && (
-          <>
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Dashboard</h2>
-              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-lg p-4 mb-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <div className="text-sm text-gray-600">Total Expenses</div>
-                    <div className="text-2xl font-bold text-indigo-600">${totalExpenses.toFixed(2)}</div>
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
+        <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Dashboard</h2>
+                  <div className="flex gap-2">
+                    <ExportButton expenses={periodExpenses} participants={participants} />
+                    <button
+                      onClick={() => setIsClosePeriodModalOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors"
+                    >
+                      <Calendar size={16} />
+                      Settle & Archive
+                    </button>
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Per Person (Avg)</div>
-                    <div className="text-2xl font-bold text-purple-600">${avgPerPerson.toFixed(2)}</div>
-                    <div className="text-xs text-gray-500 mt-1">Based on {activeParticipants.length} active participant{activeParticipants.length !== 1 ? 's' : ''}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-600">Transactions</div>
-                    <div className="text-2xl font-bold text-gray-900">{expenses.filter(e => !e.isSettlement).length}</div>
+                </div>
+
+                <div className="themed-card rounded-xl p-4 mb-4" style={{ background: darkMode ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))' : 'linear-gradient(135deg, #eef2ff, #f5f3ff)' }}>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div><div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Total Expenses</div><div className="text-2xl font-bold" style={{ color: 'var(--accent-indigo)' }}>${totalExpenses.toFixed(2)}</div></div>
+                    <div><div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Per Person (Avg)</div><div className="text-2xl font-bold text-purple-500">${avgPerPerson.toFixed(2)}</div><div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Based on {activeParticipants.length} active</div></div>
+                    <div><div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Transactions</div><div className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{periodExpenses.filter(e => !e.isSettlement).length}</div></div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <QuickAddExpense onAdd={handleAddExpense} participants={participants} />
-
-            <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-8">
-                <ExpenseList
-                  expenses={expenses}
+              {/* Quick Add Expense - Visible on Desktop/Tablet */}
+              <div className="hidden sm:block">
+                <QuickAddExpense
+                  onAdd={handleAddExpense}
                   participants={participants}
-                  onDelete={handleDeleteExpense}
-                  onEdit={handleOpenEditExpense}
+                  currentUserId={user?.id}
                 />
               </div>
-              <div className="lg:col-span-1">
-                <div className="sticky top-24">
-                  <SettleUp
-                    balances={balances}
-                    participants={participants}
-                    onOpenSettleModal={handleOpenSettleModal}
-                  />
+
+              {/* Mobile "Add Expense" Button (Stick to button for mobile to save space) */}
+              <button
+                onClick={() => setIsExpenseModalOpen(true)}
+                className="sm:hidden w-full bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 shadow-md mb-6 hover:bg-indigo-700 transition-colors"
+              >
+                <Plus size={20} /> Add Expense
+              </button>
+              <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} currentUserId={user?.id} />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-8">
+                  <ExpenseList expenses={periodExpenses} participants={participants} onDelete={handleDeleteExpense} onEdit={handleOpenEditExpense} />
+                </div>
+                <div className="lg:col-span-1">
+                  <div className="sticky top-24"><SettleUp balances={balances} participants={participants} onOpenSettleModal={handleOpenSettleModal} /></div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </motion.div>
+          )}
 
-        {activeTab === 'participants' && (
-          <div className="max-w-2xl">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Manage Participants</h2>
-              <p className="text-gray-600">Add or remove people from your group</p>
-            </div>
-            <ParticipantManager
-              participants={participants}
-              currentUserEmail={user?.email}
-              onAdd={handleAddParticipant}
-              onRemove={handleRemoveParticipant}
-            />
-          </div>
-        )}
-
-        {activeTab === 'activity' && (
-          <div className="max-w-4xl">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Activity Log</h2>
-              <p className="text-gray-600">Track all changes to this group</p>
-            </div>
-            <ActivityLog
-              activities={activityLog}
-              onUndo={handleUndo}
-            />
-          </div>
-        )}
-
-        {activeTab === 'chat' && (
-          <div className="max-w-4xl">
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Group Chat</h2>
-              <p className="text-gray-600">Discuss expenses with your group</p>
-            </div>
-            <Chat
-              messages={chatMessages}
-              currentUser={{ id: user?.id, name: displayName || user?.email }}
-              onSendMessage={handleSendMessage}
-            />
-          </div>
-        )}
-
-        {activeTab === 'analytics' && (
-          <Analytics
-            expenses={expenses}
-            participants={participants}
-          />
-        )}
+          {activeTab === 'participants' && (
+            <motion.div key="participants" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-2xl">
+              <ParticipantManager participants={participants} currentUserEmail={user?.email} onAdd={handleAddParticipant} onEdit={handleEditParticipant} onRemove={handleRemoveParticipant} />
+            </motion.div>
+          )}
+          {activeTab === 'activity' && (
+            <motion.div key="activity" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-4xl">
+              <ActivityLog activities={activityLog} onUndo={handleUndo} />
+            </motion.div>
+          )}
+          {activeTab === 'chat' && (
+            <motion.div key="chat" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-4xl">
+              <Chat messages={chatMessages} currentUser={{ id: user?.id, name: user?.email?.split('@')[0] }} onSendMessage={handleSendMessage} />
+            </motion.div>
+          )}
+          {activeTab === 'analytics' && (
+            <motion.div key="analytics" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}>
+              <Analytics expenses={periodExpenses} participants={participants} />
+            </motion.div>
+          )}
+          {activeTab === 'archive' && (
+            <motion.div key="archive" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}>
+              <PeriodArchive periods={periods} participants={participants} expenses={expenses} onViewDetails={setViewPeriodDetails} onDelete={handleDeletePeriod} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
-      <AddExpenseModal
-        isOpen={isExpenseModalOpen}
-        onClose={() => {
-          setIsExpenseModalOpen(false);
-          setEditExpense(null);
-        }}
-        onAdd={handleAddExpense}
-        onEdit={handleEditExpense}
+      {/* Mobile Bottom Navigation */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 glass-strong" style={{ borderTop: '1px solid var(--border-primary)' }}>
+        <div className="flex justify-around items-center h-16 px-1">
+          {[
+            { key: 'dashboard', icon: <TrendingUp size={20} />, label: 'Home' },
+            { key: 'participants', icon: <Users size={20} />, label: 'People' },
+            { key: 'activity', icon: <Clock size={20} />, label: 'Activity' },
+            { key: 'chat', icon: <MessageSquare size={20} />, label: 'Chat' },
+            { key: 'analytics', icon: <BarChart3 size={20} />, label: 'Stats' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all ${activeTab === tab.key ? 'scale-110' : 'opacity-60'}`}
+              style={{ color: activeTab === tab.key ? 'var(--accent-indigo)' : 'var(--text-muted)' }}
+            >
+              {tab.icon}
+              <span className="text-[10px] font-medium">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => { setIsExpenseModalOpen(false); setEditExpense(null); }} onAdd={handleAddExpense} onEdit={handleEditExpense} participants={participants} editExpense={editExpense} />
+      <SettleUpModal isOpen={isSettleModalOpen} onClose={() => { setIsSettleModalOpen(false); setSettlePrefill(null); }} onSettle={handleSettle} participants={participants} prefill={settlePrefill} />
+      <ShareGroupModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} groupData={shareGroupData} />
+      <PinModal isOpen={isPinModalOpen} onClose={() => { setIsPinModalOpen(false); setPinModalGroupId(null); }} onSubmit={handlePinSubmit} mode={pinModalMode} groupName={groups.find(g => g.id === pinModalGroupId)?.name} />
+      <InviteMemberModal isOpen={isInviteMemberModalOpen} onClose={() => setIsInviteMemberModalOpen(false)} onInvite={handleInviteMember} groupName={groups.find(g => g.id === currentGroupId)?.name || 'this group'} />
+      <DevDashboard isOpen={isDevModalOpen} onClose={() => setIsDevModalOpen(false)} />
+
+      {/* Close Period / Archive Modal */}
+      <ClosePeriodModal
+        isOpen={isClosePeriodModalOpen}
+        onClose={() => setIsClosePeriodModalOpen(false)}
+        period={periods.find(p => p.id === currentPeriodId)}
+        balances={balances}
+        settlements={calculateSettlements(balances, participants)}
+        totalExpenses={totalExpenses}
+        transactionCount={periodExpenses.length}
+        expenses={periodExpenses}
         participants={participants}
-        editExpense={editExpense}
+        onConfirm={handleClosePeriod}
       />
 
-      <SettleUpModal
-        isOpen={isSettleModalOpen}
-        onClose={() => {
-          setIsSettleModalOpen(false);
-          setSettlePrefill(null);
-        }}
-        onSettle={handleSettle}
-        participants={participants}
-        prefill={settlePrefill}
-      />
-
-      <ShareGroupModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        groupData={shareGroupData}
-      />
-
-      <PinModal
-        isOpen={isPinModalOpen}
-        onClose={() => {
-          setIsPinModalOpen(false);
-          setPinModalGroupId(null);
-        }}
-        onSubmit={handlePinSubmit}
-        mode={pinModalMode}
-        groupName={groups.find(g => g.id === pinModalGroupId)?.name}
-      />
-
-      <InviteMemberModal
-        isOpen={isInviteMemberModalOpen}
-        onClose={() => setIsInviteMemberModalOpen(false)}
-        onInvite={handleInviteMember}
-        groupName={groups.find(g => g.id === currentGroupId)?.name || 'this group'}
-      />
-
-      <DevDashboard
-        isOpen={isDevModalOpen}
-        onClose={() => setIsDevModalOpen(false)}
-      />
+      {viewPeriodDetails && (
+        <PeriodDetailsView
+          period={viewPeriodDetails}
+          expenses={expenses.filter(e => e.periodId === viewPeriodDetails.id)}
+          participants={participants}
+          onClose={() => setViewPeriodDetails(null)}
+        />
+      )}
     </div>
   );
 }

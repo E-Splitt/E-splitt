@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
 import { LogIn, Mail, Lock, Loader, AlertCircle } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
-const Login = ({ onToggleSignup, onToggleForgotPassword }) => {
+const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     const { signIn } = useAuth();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Check if there's a redirected location or group to join
+    const from = location.state?.from?.pathname || '/app';
+    const joinGroupId = location.state?.joinGroupId;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -20,6 +27,15 @@ const Login = ({ onToggleSignup, onToggleForgotPassword }) => {
 
             if (signInError) {
                 setError(signInError.message);
+            } else {
+                // Determine destination
+                if (joinGroupId) {
+                    // Redirect to app with join intent
+                    navigate('/app', { state: { joinGroupId } });
+                } else {
+                    // Redirect to original destination or dashboard
+                    navigate(from);
+                }
             }
         } catch (err) {
             setError('An unexpected error occurred');
@@ -90,13 +106,12 @@ const Login = ({ onToggleSignup, onToggleForgotPassword }) => {
 
                     {/* Forgot Password Link */}
                     <div className="text-right">
-                        <button
-                            type="button"
-                            onClick={onToggleForgotPassword}
+                        <Link
+                            to="/forgot-password"
                             className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
                         >
                             Forgot password?
-                        </button>
+                        </Link>
                     </div>
 
                     {/* Submit Button */}
@@ -123,12 +138,13 @@ const Login = ({ onToggleSignup, onToggleForgotPassword }) => {
                 <div className="mt-6 text-center">
                     <p className="text-gray-600">
                         Don't have an account?{' '}
-                        <button
-                            onClick={onToggleSignup}
+                        <Link
+                            to="/signup"
+                            state={{ joinGroupId }} // Preserve join intent
                             className="text-indigo-600 hover:text-indigo-700 font-semibold"
                         >
                             Sign Up
-                        </button>
+                        </Link>
                     </p>
                 </div>
             </div>

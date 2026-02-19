@@ -75,19 +75,30 @@ const Analytics = ({ expenses, participants }) => {
 
     if (actualExpenses.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-                <TrendingUp size={64} className="mb-4 text-gray-300" />
+            <div className="flex flex-col items-center justify-center py-20" style={{ color: 'var(--text-muted)' }}>
+                <TrendingUp size={64} className="mb-4" style={{ color: 'var(--text-muted)' }} />
                 <h3 className="text-xl font-semibold mb-2">No Data Yet</h3>
                 <p className="text-sm">Add some expenses to see analytics</p>
             </div>
         );
     }
 
+    // Recharts tooltip style
+    const tooltipStyle = {
+        borderRadius: '8px',
+        border: '1px solid var(--border-primary)',
+        fontSize: '12px',
+        backgroundColor: 'var(--bg-card)',
+        color: 'var(--text-primary)'
+    };
+
+    const axisTickStyle = { fontSize: 10, fill: 'var(--text-muted)' };
+
     return (
         <div className="space-y-6">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white p-6 rounded-xl shadow-lg">
+                <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
                     <div className="flex items-center justify-between mb-2">
                         <DollarSign size={24} />
                         <span className="text-indigo-200 text-sm">Total</span>
@@ -96,7 +107,7 @@ const Analytics = ({ expenses, participants }) => {
                     <div className="text-indigo-200 text-sm mt-1">All time spending</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl shadow-lg">
+                <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
                     <div className="flex items-center justify-between mb-2">
                         <Calendar size={24} />
                         <span className="text-purple-200 text-sm">Expenses</span>
@@ -105,7 +116,7 @@ const Analytics = ({ expenses, participants }) => {
                     <div className="text-purple-200 text-sm mt-1">Total transactions</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-pink-500 to-pink-600 text-white p-6 rounded-xl shadow-lg">
+                <div className="bg-gradient-to-br from-pink-500 to-pink-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
                     <div className="flex items-center justify-between mb-2">
                         <TrendingUp size={24} />
                         <span className="text-pink-200 text-sm">Average</span>
@@ -116,7 +127,7 @@ const Analytics = ({ expenses, participants }) => {
                     <div className="text-pink-200 text-sm mt-1">Per expense</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-6 rounded-xl shadow-lg">
+                <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
                     <div className="flex items-center justify-between mb-2">
                         <Users size={24} />
                         <span className="text-amber-200 text-sm">Categories</span>
@@ -129,19 +140,19 @@ const Analytics = ({ expenses, participants }) => {
             {/* Charts Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Monthly Trend */}
-                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                        <TrendingUp size={20} className="text-indigo-600" />
+                <div className="themed-card p-4 sm:p-6 rounded-xl">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                        <TrendingUp size={20} style={{ color: 'var(--accent-indigo)' }} />
                         Monthly Spending Trend
                     </h3>
                     <div className="h-[200px] sm:h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={monthlyData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                <XAxis dataKey="month" tick={{ fontSize: 10 }} tickMargin={10} />
-                                <YAxis tick={{ fontSize: 10 }} width={40} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+                                <XAxis dataKey="month" tick={axisTickStyle} tickMargin={10} />
+                                <YAxis tick={axisTickStyle} width={40} />
                                 <Tooltip
-                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+                                    contentStyle={tooltipStyle}
                                     formatter={(value) => [`$${value}`, 'Amount']}
                                 />
                                 <Line
@@ -158,8 +169,8 @@ const Analytics = ({ expenses, participants }) => {
                 </div>
 
                 {/* Category Breakdown */}
-                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                <div className="themed-card p-4 sm:p-6 rounded-xl">
+                    <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
                         Spending by Category
                     </h3>
                     <div className="h-[200px] sm:h-[300px] w-full">
@@ -179,27 +190,27 @@ const Analytics = ({ expenses, participants }) => {
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip formatter={(value) => `$${value}`} contentStyle={{ fontSize: '12px' }} />
-                                <Legend wrapperStyle={{ fontSize: '12px' }} />
+                                <Tooltip formatter={(value) => `$${value}`} contentStyle={tooltipStyle} />
+                                <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
                 {/* Top Spenders */}
-                <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-gray-100 lg:col-span-2">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="themed-card p-4 sm:p-6 rounded-xl lg:col-span-2">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                         <Users size={20} className="text-purple-600" />
                         Top Spenders
                     </h3>
                     <div className="h-[200px] sm:h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={topSpenders}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                <XAxis dataKey="name" tick={{ fontSize: 10 }} tickMargin={10} />
-                                <YAxis tick={{ fontSize: 10 }} width={40} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+                                <XAxis dataKey="name" tick={axisTickStyle} tickMargin={10} />
+                                <YAxis tick={axisTickStyle} width={40} />
                                 <Tooltip
-                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+                                    contentStyle={tooltipStyle}
                                     formatter={(value) => [`$${value}`, 'Total Spent']}
                                 />
                                 <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
@@ -210,31 +221,31 @@ const Analytics = ({ expenses, participants }) => {
             </div>
 
             {/* Category Details Table */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Category Breakdown</h3>
+            <div className="themed-card p-6 rounded-xl">
+                <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Category Breakdown</h3>
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead>
-                            <tr className="border-b border-gray-200">
-                                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Category</th>
-                                <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Amount</th>
-                                <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">% of Total</th>
+                            <tr style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                                <th className="text-left py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Category</th>
+                                <th className="text-right py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Amount</th>
+                                <th className="text-right py-3 px-4 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>% of Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             {categoryData.map((cat, index) => (
-                                <tr key={cat.name} className="border-b border-gray-100 hover:bg-gray-50">
+                                <tr key={cat.name} className="theme-transition" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
                                     <td className="py-3 px-4 flex items-center gap-2">
                                         <div
                                             className="w-3 h-3 rounded-full"
                                             style={{ backgroundColor: COLORS[index % COLORS.length] }}
                                         />
-                                        <span className="text-sm text-gray-900">{cat.name}</span>
+                                        <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
                                     </td>
-                                    <td className="text-right py-3 px-4 text-sm font-medium text-gray-900">
+                                    <td className="text-right py-3 px-4 text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                                         ${cat.value.toFixed(2)}
                                     </td>
-                                    <td className="text-right py-3 px-4 text-sm text-gray-600">
+                                    <td className="text-right py-3 px-4 text-sm" style={{ color: 'var(--text-secondary)' }}>
                                         {((cat.value / totalSpending) * 100).toFixed(1)}%
                                     </td>
                                 </tr>

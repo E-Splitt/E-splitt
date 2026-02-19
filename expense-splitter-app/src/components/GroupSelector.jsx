@@ -50,13 +50,13 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
     return (
         <div className="relative">
             <div className="flex items-center gap-2">
-                <Users size={20} className="text-gray-500" />
+                <Users size={20} style={{ color: 'var(--text-muted)' }} />
 
                 {/* Custom Dropdown Trigger */}
                 <div className="relative">
                     <button
                         onClick={() => setShowGroupList(!showGroupList)}
-                        className="flex items-center justify-between gap-2 p-3 border border-gray-300 rounded-lg text-base font-medium bg-white min-w-[200px] max-w-[300px] hover:border-indigo-300 transition-colors text-left"
+                        className="flex items-center justify-between gap-2 p-3 rounded-lg text-base font-medium min-w-[200px] max-w-[300px] transition-colors text-left themed-input"
                     >
                         <span className="truncate">
                             {currentGroupObj ? (
@@ -68,14 +68,14 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                 </>
                             ) : 'Select Group'}
                         </span>
-                        <span className="text-gray-400 text-xs">▼</span>
+                        <span style={{ color: 'var(--text-muted)' }} className="text-xs">▼</span>
                     </button>
 
                     {/* Custom Dropdown List */}
                     {showGroupList && (
                         <>
                             <div className="fixed inset-0 z-10" onClick={() => setShowGroupList(false)} />
-                            <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto">
+                            <div className="absolute top-full left-0 mt-1 w-full rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto themed-card">
                                 {groups.map(group => {
                                     const unlockedGroups = getUnlockedGroups();
                                     const isUnlocked = unlockedGroups.includes(group.id);
@@ -90,7 +90,10 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                                 onSelectGroup(group.id);
                                                 setShowGroupList(false);
                                             }}
-                                            className={`w-full text-left px-4 py-3 text-sm hover:bg-indigo-50 transition-colors flex items-center gap-2 ${isSelected ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
+                                            className={`w-full text-left px-4 py-3 text-sm transition-colors flex items-center gap-2 ${isSelected ? 'font-medium' : ''}`}
+                                            style={{ color: isSelected ? 'var(--accent-indigo)' : 'var(--text-primary)', backgroundColor: isSelected ? 'var(--bg-card-hover)' : 'transparent' }}
+                                            onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-card-hover)'}
+                                            onMouseLeave={(e) => { if (!isSelected) e.target.style.backgroundColor = 'transparent'; }}
                                         >
                                             <span>{lockIcon}</span>
                                             <span className="truncate">{group.name}</span>
@@ -99,7 +102,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                     );
                                 })}
                                 {groups.length === 0 && (
-                                    <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                                    <div className="px-4 py-3 text-sm text-center" style={{ color: 'var(--text-muted)' }}>
                                         No groups found
                                     </div>
                                 )}
@@ -117,7 +120,8 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                 </button>
                 <button
                     onClick={() => setShowMenu(!showMenu)}
-                    className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="p-2 hover:opacity-75 rounded-lg transition-colors"
+                    style={{ color: 'var(--text-secondary)' }}
                     title="Group options"
                 >
                     <Edit2 size={20} />
@@ -128,21 +132,23 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
             {showMenu && (
                 <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                    <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 w-48">
+                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg z-20 w-48 themed-card">
                         <button
                             onClick={() => {
                                 setEditGroupName(currentGroupObj?.name || '');
                                 setIsEditing(true);
                                 setShowMenu(false);
                             }}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                            style={{ color: 'var(--text-primary)' }}
                         >
                             <Edit2 size={14} />
                             Rename Group
                         </button>
                         <button
                             onClick={handleShare}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                            style={{ color: 'var(--text-primary)' }}
                         >
                             <Share2 size={14} />
                             Share Group
@@ -152,7 +158,8 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                 onSetPin?.(currentGroup);
                                 setShowMenu(false);
                             }}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 transition-colors"
+                            style={{ color: 'var(--text-primary)' }}
                         >
                             <Lock size={14} />
                             Set/Change PIN
@@ -176,24 +183,24 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                         setNewGroupName('');
                         setNewGroupPin('');
                     }} />
-                    <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-20 w-80">
-                        <h3 className="text-sm font-semibold text-gray-900 mb-3">Create New Group</h3>
+                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg p-4 z-20 w-80 themed-card">
+                        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Create New Group</h3>
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">Group Name *</label>
+                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Group Name *</label>
                                 <input
                                     type="text"
                                     value={newGroupName}
                                     onChange={(e) => setNewGroupName(e.target.value)}
                                     placeholder="e.g., Beach Trip 2024"
-                                    className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    className="themed-input w-full p-2 rounded-lg text-sm"
                                     autoFocus
                                     autoComplete="off"
                                     onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                                     <Lock size={12} className="inline mr-1" />
                                     PIN (optional, 4 digits)
                                 </label>
@@ -205,9 +212,9 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                     onChange={(e) => setNewGroupPin(e.target.value.replace(/\D/g, ''))}
                                     placeholder="••••"
                                     autoComplete="new-password"
-                                    className="w-full p-2 border border-gray-300 rounded-lg text-sm text-center tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    className="themed-input w-full p-2 rounded-lg text-sm text-center tracking-widest"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Leave blank for no PIN protection</p>
+                                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Leave blank for no PIN protection</p>
                             </div>
                         </div>
                         <div className="flex gap-2 mt-4">
@@ -223,7 +230,8 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                     setNewGroupName('');
                                     setNewGroupPin('');
                                 }}
-                                className="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                                className="p-2 rounded-lg"
+                                style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
                             >
                                 <X size={16} />
                             </button>
@@ -239,14 +247,14 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                         setIsEditing(false);
                         setEditGroupName('');
                     }} />
-                    <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-20 w-64">
+                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg p-3 z-20 w-64 themed-card">
                         <div className="flex items-center gap-2">
                             <input
                                 type="text"
                                 value={editGroupName}
                                 onChange={(e) => setEditGroupName(e.target.value)}
                                 placeholder="Group name..."
-                                className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="themed-input flex-1 p-2 rounded-lg text-sm"
                                 autoFocus
                                 onKeyPress={(e) => e.key === 'Enter' && handleEdit()}
                             />
@@ -261,7 +269,8 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                     setIsEditing(false);
                                     setEditGroupName('');
                                 }}
-                                className="p-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                                className="p-2 rounded-lg"
+                                style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
                             >
                                 <X size={16} />
                             </button>

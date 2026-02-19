@@ -63,30 +63,31 @@ const ActivityLog = ({ activities, onUndo }) => {
     });
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+        <div className="themed-card rounded-xl">
+            <div className="p-6" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                <h2 className="text-lg font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                     <Clock size={20} />
                     Activity Log
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
                     Track all changes to this group
                 </p>
 
                 {/* Search Input */}
                 <div className="mt-4 relative">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
                     <input
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search activities..."
-                        className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                        className="themed-input w-full pl-10 pr-10 py-2 rounded-lg text-sm"
                     />
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-75"
+                            style={{ color: 'var(--text-muted)' }}
                         >
                             <X size={16} />
                         </button>
@@ -96,27 +97,27 @@ const ActivityLog = ({ activities, onUndo }) => {
 
             <div className="max-h-[600px] overflow-y-auto">
                 {filteredActivities.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                        <Clock className="mx-auto mb-2 text-gray-400" size={48} />
+                    <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
+                        <Clock className="mx-auto mb-2" size={48} style={{ color: 'var(--text-muted)' }} />
                         <p className="font-medium">{searchQuery ? 'No matching activities' : 'No activity yet'}</p>
                         <p className="text-sm">{searchQuery ? 'Try a different search term' : 'Changes will appear here'}</p>
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-100">
+                    <div>
                         {filteredActivities.map((activity, index) => {
                             const colorClass = getActivityColor(activity);
 
                             return (
-                                <div key={activity.id} className="p-4 hover:bg-gray-50 transition-colors">
+                                <div key={activity.id} className="p-4 transition-colors theme-transition" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
                                     <div className="flex items-start gap-3">
                                         <div className={`p-2 rounded-lg ${colorClass}`}>
                                             {getActivityIcon(activity)}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-gray-900">
+                                            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                                                 {activity.description}
                                             </p>
-                                            <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                            <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                                                 <span>{activity.actorName}</span>
                                                 <span>•</span>
                                                 <span>{formatTimestamp(activity.timestamp)}</span>
@@ -125,7 +126,8 @@ const ActivityLog = ({ activities, onUndo }) => {
                                         {canUndo(index, activity) && (
                                             <button
                                                 onClick={() => onUndo(activity)}
-                                                className="text-indigo-600 hover:text-indigo-700 p-2 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1 text-sm"
+                                                className="p-2 rounded-lg transition-colors flex items-center gap-1 text-sm"
+                                                style={{ color: 'var(--accent-indigo)' }}
                                                 title="Undo this action"
                                             >
                                                 <RotateCcw size={14} />
@@ -144,4 +146,3 @@ const ActivityLog = ({ activities, onUndo }) => {
 };
 
 export default ActivityLog;
-

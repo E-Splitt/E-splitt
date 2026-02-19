@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { UserPlus, Mail, Lock, User, Loader, AlertCircle, CheckCircle } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
-const SignUp = ({ onToggleLogin }) => {
+const SignUp = () => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -12,6 +13,11 @@ const SignUp = ({ onToggleLogin }) => {
     const [success, setSuccess] = useState(false);
 
     const { signUp } = useAuth();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Check if there's a redirected location or group to join
+    const joinGroupId = location.state?.joinGroupId;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -44,7 +50,14 @@ const SignUp = ({ onToggleLogin }) => {
                 setError(signUpError.message);
             } else {
                 setSuccess(true);
-                // Note: User will be automatically logged in after signup
+                // After a short delay, redirect
+                setTimeout(() => {
+                    if (joinGroupId) {
+                        navigate('/app', { state: { joinGroupId } });
+                    } else {
+                        navigate('/app');
+                    }
+                }, 2000);
             }
         } catch (err) {
             setError('An unexpected error occurred');
@@ -62,8 +75,9 @@ const SignUp = ({ onToggleLogin }) => {
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">Account Created!</h2>
                     <p className="text-gray-600 mb-6">
-                        Welcome to E-Split! You're now logged in and ready to create your first group.
+                        Welcome to E-Split! Redirecting you to the app...
                     </p>
+                    <Loader className="animate-spin text-indigo-600 mx-auto" size={24} />
                 </div>
             </div>
         );
@@ -191,12 +205,13 @@ const SignUp = ({ onToggleLogin }) => {
                 <div className="mt-6 text-center">
                     <p className="text-gray-600">
                         Already have an account?{' '}
-                        <button
-                            onClick={onToggleLogin}
+                        <Link
+                            to="/login"
+                            state={{ joinGroupId }} // Preserve join intent
                             className="text-indigo-600 hover:text-indigo-700 font-semibold"
                         >
                             Sign In
-                        </button>
+                        </Link>
                     </p>
                 </div>
             </div>

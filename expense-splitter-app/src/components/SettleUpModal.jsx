@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign } from 'lucide-react';
+import { X, DollarSign, ArrowRightLeft, Info } from 'lucide-react';
 
 const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => {
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [amount, setAmount] = useState('');
     const [note, setNote] = useState('');
+    const [error, setError] = useState('');
 
-    // Update state when prefill changes
     useEffect(() => {
         if (prefill) {
             setFrom(prefill.from?.id || '');
@@ -16,17 +16,31 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
         }
     }, [prefill]);
 
+    useEffect(() => {
+        setError('');
+    }, [from, to, amount]);
+
+    const suggestedAmount = prefill?.amount;
+
+    const handleSwap = () => {
+        setFrom(to);
+        setTo(from);
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
 
         const amountFloat = parseFloat(amount);
-        if (!from || !to || isNaN(amountFloat) || amountFloat <= 0) {
-            alert('Please fill all required fields');
+        if (!from || !to) {
+            setError('Select both a payer and receiver');
             return;
         }
-
         if (from === to) {
-            alert('Payer and receiver must be different people');
+            setError('Payer and receiver must be different people');
+            return;
+        }
+        if (isNaN(amountFloat) || amountFloat <= 0) {
+            setError('Enter a valid amount');
             return;
         }
 
@@ -39,9 +53,9 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
             description: note || `Settlement: ${fromPerson?.name} paid ${toPerson?.name}`,
             amount: amountFloat,
             paidBy: from,
-            paidByName: fromPerson?.name, // Store name to preserve it
+            paidByName: fromPerson?.name,
             paidTo: to,
-            paidToName: toPerson?.name, // Store name to preserve it
+            paidToName: toPerson?.name,
             category: 'settlement',
             shares: { [to]: amountFloat },
             isSettlement: true
@@ -49,7 +63,7 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
 
         onSettle(settlement);
         resetForm();
-        onClose(); // Close modal after success
+        onClose();
     };
 
     const resetForm = () => {
@@ -57,28 +71,29 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
         setTo('');
         setAmount('');
         setNote('');
+        setError('');
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-                <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-800">Record Payment</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 modal-overlay" onClick={onClose}>
+            <div className="rounded-xl shadow-xl w-full max-w-md themed-card" onClick={(e) => e.stopPropagation()}>
+                <div className="p-6 flex justify-between items-center glass-strong" style={{ borderBottom: '1px solid var(--border-primary)', borderRadius: '12px 12px 0 0' }}>
+                    <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Record Payment</h2>
+                    <button onClick={onClose} className="hover:opacity-75" style={{ color: 'var(--text-muted)' }}>
                         <X size={24} />
                     </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    {/* From */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">From (Payer)</label>
+                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>From (Payer)</label>
                         <select
                             value={from}
                             onChange={(e) => setFrom(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            required
+                            className="themed-select w-full p-3 rounded-lg"
                         >
                             <option value="">Select person</option>
                             {participants.map(person => (
@@ -87,17 +102,26 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
                         </select>
                     </div>
 
+                    {/* Swap button */}
                     <div className="flex items-center justify-center">
-                        <div className="text-gray-400">→</div>
+                        <button
+                            type="button"
+                            onClick={handleSwap}
+                            className="p-2 rounded-full hover:scale-110 transition-all"
+                            style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-muted)' }}
+                            title="Swap payer and receiver"
+                        >
+                            <ArrowRightLeft size={18} />
+                        </button>
                     </div>
 
+                    {/* To */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">To (Receiver)</label>
+                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>To (Receiver)</label>
                         <select
                             value={to}
                             onChange={(e) => setTo(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            required
+                            className="themed-select w-full p-3 rounded-lg"
                         >
                             <option value="">Select person</option>
                             {participants.map(person => (
@@ -106,32 +130,48 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
                         </select>
                     </div>
 
+                    {/* Amount */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Amount</label>
+                            {suggestedAmount && (
+                                <span className="flex items-center gap-1 text-xs font-medium" style={{ color: 'var(--accent-indigo)' }}>
+                                    <Info size={12} />
+                                    Suggested: ${suggestedAmount.toFixed(2)}
+                                </span>
+                            )}
+                        </div>
                         <div className="relative">
-                            <span className="absolute left-3 top-3 text-gray-500">$</span>
+                            <span className="absolute left-3 top-3" style={{ color: 'var(--text-muted)' }}>$</span>
                             <input
                                 type="number"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="w-full p-3 pl-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                className="themed-input w-full p-3 pl-8 rounded-lg"
                                 placeholder="0.00"
                                 step="0.01"
-                                required
                             />
                         </div>
                     </div>
 
+                    {/* Note */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Note (Optional)</label>
+                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>Note (Optional)</label>
                         <input
                             type="text"
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            className="themed-input w-full p-3 rounded-lg"
                             placeholder="Add a note..."
                         />
                     </div>
+
+                    {/* Inline error */}
+                    {error && (
+                        <div className="p-3 rounded-lg bg-red-500/10 text-red-400 text-sm text-center font-medium">
+                            {error}
+                        </div>
+                    )}
 
                     <div className="pt-4">
                         <button

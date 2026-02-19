@@ -1,35 +1,56 @@
-import React, { useState } from 'react';
-import { Plus, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Loader, AlertCircle, Check } from 'lucide-react';
 
-const QuickAddExpense = ({ onAdd, participants }) => {
+const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
-    const [paidBy, setPaidBy] = useState('');
+    const [paidBy, setPaidBy] = useState(currentUserId || '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const [showSuccess, setShowSuccess] = useState(false);
 
-    const handleSubmit = (e) => {
+    useEffect(() => {
+        if (!paidBy && currentUserId) {
+            setPaidBy(currentUserId);
+        } else if (!paidBy && participants.length > 0) {
+            setPaidBy(participants[0].id);
+        }
+    }, [currentUserId, participants, paidBy]);
+
+    // Auto-dismiss error
+    useEffect(() => {
+        if (error) {
+            const t = setTimeout(() => setError(''), 3000);
+            return () => clearTimeout(t);
+        }
+    }, [error]);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
 
         const amountFloat = parseFloat(amount);
-
-        // Validate paidBy exists in participants
-        const payerExists = participants.some(p => p.id === paidBy);
-
-        if (!description || isNaN(amountFloat) || amountFloat <= 0 || !paidBy || !payerExists) {
-            if (!payerExists && participants.length > 0) {
-                setPaidBy(participants[0].id); // Reset to valid user
-                alert("Please select a valid payer.");
-            }
+        if (!description.trim()) {
+            setError('Enter a description');
+            return;
+        }
+        if (isNaN(amountFloat) || amountFloat <= 0) {
+            setError('Enter a valid amount');
             return;
         }
 
-        // Auto-split equally among all participants
-        const share = amountFloat / participants.length;
         const shares = {};
-        participants.forEach(p => shares[p.id] = share);
+        if (participants.length > 0) {
+            const share = amountFloat / participants.length;
+            participants.forEach(p => shares[p.id] = share);
+        } else {
+            shares[paidBy] = amountFloat;
+        }
 
-        const newExpense = {
+        const expenseData = {
             id: Date.now(),
             date: new Date().toLocaleDateString(),
+            expenseDate: new Date().toISOString().split('T')[0],
             description,
             amount: amountFloat,
             paidBy,
@@ -38,65 +59,98 @@ const QuickAddExpense = ({ onAdd, participants }) => {
             isSettlement: false
         };
 
-        onAdd(newExpense);
-        setDescription('');
-        setAmount('');
+        try {
+            setIsSubmitting(true);
+            await onAdd(expenseData);
+
+            setDescription('');
+            setAmount('');
+            setPaidBy(currentUserId || (participants[0]?.id || ''));
+
+            // Success flash
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 1500);
+        } catch (error) {
+            console.error('Error adding expense:', error);
+            setError('Failed to add expense');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    // Set default payer to first participant
-    React.useEffect(() => {
-        if (participants.length > 0 && !paidBy) {
-            setPaidBy(participants[0].id);
-        }
-    }, [participants, paidBy]);
-
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <Plus size={16} />
-                Quick Add Expense
-            </h3>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <input
-                    type="text"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Description"
-                    className="p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    required
-                />
-                <div className="relative">
-                    <span className="absolute left-3 top-2 text-gray-500 text-sm">$</span>
+        <div className="mb-6 space-y-1">
+            <form
+                onSubmit={handleSubmit}
+                className={`themed-card rounded-lg p-2 flex flex-col md:flex-row gap-2 items-center transition-all duration-300 ${showSuccess ? 'ring-2 ring-green-400 shadow-green-400/20 shadow-lg' : ''
+                    }`}
+            >
+                {/* Description Input */}
+                <div className="flex-grow w-full md:w-auto">
+                    <input
+                        type="text"
+                        value={description}
+                        onChange={(e) => { setDescription(e.target.value); setError(''); }}
+                        placeholder="Quick expense description..."
+                        className="themed-input w-full p-2 rounded-md text-sm"
+                    />
+                </div>
+
+                {/* Amount Input */}
+                <div className="w-full md:w-32 relative">
+                    <span className="absolute left-2 top-2 text-sm" style={{ color: 'var(--text-muted)' }}>$</span>
                     <input
                         type="number"
                         value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        onChange={(e) => { setAmount(e.target.value); setError(''); }}
                         placeholder="0.00"
                         step="0.01"
-                        className="w-full p-2 pl-7 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        required
+                        className="themed-input w-full p-2 pl-6 rounded-md text-sm"
                     />
                 </div>
-                <select
-                    value={paidBy}
-                    onChange={(e) => setPaidBy(e.target.value)}
-                    className="p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                    {participants.map(person => (
-                        <option key={person.id} value={person.id}>{person.name} paid</option>
-                    ))}
-                </select>
+
+                {/* Paid By Selector */}
+                <div className="w-full md:w-40">
+                    <select
+                        value={paidBy}
+                        onChange={(e) => setPaidBy(e.target.value)}
+                        className="themed-select w-full p-2 rounded-md text-sm"
+                    >
+                        {participants.map(person => (
+                            <option key={person.id} value={person.id}>
+                                {person.id === currentUserId ? 'You' : person.name} paid
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Submit Button */}
                 <button
                     type="submit"
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                    disabled={isSubmitting}
+                    className={`w-full md:w-auto px-4 py-2 rounded-md font-medium flex items-center justify-center gap-1 transition-all hover:scale-105 whitespace-nowrap text-sm disabled:opacity-70 ${showSuccess
+                            ? 'bg-green-600 text-white'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
                 >
-                    <Plus size={16} />
-                    Add & Split
+                    {isSubmitting ? (
+                        <Loader size={16} className="animate-spin" />
+                    ) : showSuccess ? (
+                        <Check size={16} />
+                    ) : (
+                        <Plus size={16} />
+                    )}
+                    {showSuccess ? 'Added!' : 'Add'}
                 </button>
             </form>
-            <p className="text-xs text-gray-500 mt-2">
-                Amount will be split equally among all {participants.length} participant{participants.length !== 1 ? 's' : ''}
-            </p>
+
+            {/* Inline error */}
+            {error && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-400 animate-pulse">
+                    <AlertCircle size={12} />
+                    {error}
+                </div>
+            )}
         </div>
     );
 };

@@ -97,3 +97,10 @@ export const getNotificationSettings = () => {
 export const saveNotificationSettings = (settings) => {
     localStorage.setItem('notificationSettings', JSON.stringify(settings));
 };
+
+export const notifyPeriodClosed = (periodName) => {
+    sendNotification('Period Archived', {
+        body: `${periodName} has been closed and archived.`,
+        tag: 'period-closed'
+    });
+};

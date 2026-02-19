@@ -94,32 +94,43 @@ export const deleteGroupInSupabase = async (groupId) => {
 // --- Real-time Listeners ---
 
 // Listen to all groups (RLS automatically filters to user's groups)
-export const subscribeToGroups = (callback) => {
-    // 1. Fetch initial data (RLS policies ensure only user's groups are returned)
-    supabase
-        .from(GROUPS_TABLE)
-        .select('*')
-        .then(({ data, error }) => {
-            if (!error && data) {
-                const groups = data.map(row => row.data);
-                callback(groups);
-            }
-        });
+// Listen to all groups (Filtered by User ID for security)
+// Listen to all groups (Filtered by User ID for security)
+export const subscribeToGroups = (userId, callback) => {
+    // Helper to fetch and filter
+    const fetchUserGroups = async () => {
+        // If userId is passed, use it, otherwise try to get from auth (fallback)
+        let currentUserId = userId;
+        if (!currentUserId) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) currentUserId = user.id;
+        }
 
-    // 2. Subscribe to changes (RLS policies ensure only user's groups trigger updates)
+        if (!currentUserId) return;
+
+        const { data, error } = await supabase
+            .from(GROUPS_TABLE)
+            .select('*')
+            .eq('user_id', currentUserId); // Explicitly fetch only MY groups
+
+        if (!error && data) {
+            const groups = data.map(row => row.data);
+            if (typeof callback === 'function') {
+                callback(groups);
+            } else {
+                console.error('Callback provided to subscribeToGroups is not a function:', callback);
+            }
+        }
+    };
+
+    fetchUserGroups();
+
+    // Subscribe to changes (Filter by user_id)
     const channel = supabase
         .channel('public:groups')
-        .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, (payload) => {
-            // Re-fetch all groups to ensure consistency (RLS filters automatically)
-            supabase
-                .from(GROUPS_TABLE)
-                .select('*')
-                .then(({ data, error }) => {
-                    if (!error && data) {
-                        const groups = data.map(row => row.data);
-                        callback(groups);
-                    }
-                });
+        .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, async (payload) => {
+            // Since payload might not have user_id on some events, safest to just refetch
+            await fetchUserGroups();
         })
         .subscribe();
 
