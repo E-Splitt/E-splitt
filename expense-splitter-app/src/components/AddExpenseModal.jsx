@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, Loader, Check, Receipt, Wallet } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getParticipantHue } from '../utils/colors';
+import { categories } from '../utils/categories';
 
 const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExpense }) => {
     const isEditing = !!editExpense;
@@ -9,6 +10,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
     const [paidBy, setPaidBy] = useState('');
+    const [category, setCategory] = useState('other');
     const [selectedParticipants, setSelectedParticipants] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
@@ -19,6 +21,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             setDescription(editExpense.description);
             setAmount(editExpense.amount.toString());
             setPaidBy(editExpense.paidBy);
+            setCategory(editExpense.category || 'other');
 
             const shareUserIds = Object.keys(editExpense.shares || {}).filter(id => editExpense.shares[id] > 0);
             setSelectedParticipants(shareUserIds);
@@ -105,7 +108,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             description,
             amount: amountFloat,
             paidBy,
-            category: editExpense?.category || 'other',
+            category: category,
             shares,
             isSettlement: false
         };
@@ -133,6 +136,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         setDescription('');
         setAmount('');
         setPaidBy('');
+        setCategory('other');
         setSelectedParticipants([]);
         setIsSubmitting(false);
         setErrors({});
@@ -184,6 +188,24 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                     <label className="field-label">Amount</label>
                     <input type="number" step="0.01" className={`field mono ${errors.amount && touched.amount ? 'border-red-500' : ''}`} placeholder="0.00" value={amount} onChange={(e) => { setAmount(e.target.value); setTouched(prev => ({...prev, amount: true})); }} />
                     {errors.amount && touched.amount && <p className="text-red-500 text-xs mt-1">{errors.amount}</p>}
+
+                    <label className="field-label">Category</label>
+                    <div className="chip-row overflow-x-auto flex-nowrap no-scrollbar pb-1" style={{ scrollbarWidth: 'none' }}>
+                      {categories.map((cat) => {
+                          const CatIcon = cat.icon;
+                          return (
+                            <motion.button
+                              key={cat.id}
+                              type="button"
+                              className={`person-chip flex-shrink-0 ${category === cat.id ? "selected" : ""}`}
+                              onClick={() => setCategory(cat.id)}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <CatIcon size={14} /> {cat.name}
+                            </motion.button>
+                          );
+                      })}
+                    </div>
 
                     <label className="field-label">Paid by</label>
                     <div className="chip-row">
