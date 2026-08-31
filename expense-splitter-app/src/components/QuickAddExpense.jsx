@@ -41,8 +41,18 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
 
         const shares = {};
         if (participants.length > 0) {
-            const share = amountFloat / participants.length;
-            participants.forEach(p => shares[p.id] = share);
+            const amountCents = Math.round(amountFloat * 100);
+            const baseShareCents = Math.floor(amountCents / participants.length);
+            let remainderCents = amountCents % participants.length;
+
+            participants.forEach(p => {
+                let shareCents = baseShareCents;
+                if (remainderCents > 0) {
+                    shareCents += 1;
+                    remainderCents -= 1;
+                }
+                shares[p.id] = shareCents / 100;
+            });
         } else {
             shares[paidBy] = amountFloat;
         }

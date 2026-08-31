@@ -31,16 +31,15 @@ const PeriodSelector = ({
             {/* Selector Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="themed-input flex items-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[280px]"
+                className="group-pill"
             >
-                <Calendar size={18} style={{ color: 'var(--text-secondary)' }} />
-                <span className="flex-1 text-left text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {activePeriod ? formatPeriodDisplay(activePeriod) : 'Select Period'}
+                <span className="truncate max-w-[200px]">
+                    {activePeriod ? activePeriod.name || formatPeriodDisplay(activePeriod) : 'Select Period'}
                 </span>
                 <ChevronDown
-                    size={18}
+                    size={14}
                     className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                    style={{ color: 'var(--text-secondary)' }}
+                    style={{ color: 'var(--text-muted)' }}
                 />
             </button>
 

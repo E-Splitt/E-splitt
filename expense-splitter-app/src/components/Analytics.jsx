@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { PieChart, Pie, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { TrendingUp, DollarSign, Users, Calendar } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths } from 'date-fns';
+import { getParticipantHue } from '../utils/colors';
 
 const Analytics = ({ expenses, participants }) => {
     // Filter out settlements
@@ -55,16 +56,21 @@ const Analytics = ({ expenses, participants }) => {
     const topSpenders = useMemo(() => {
         const spenderTotals = {};
         actualExpenses.forEach(exp => {
-            const payer = participants.find(p => p.id === exp.paidBy);
+            const payerIndex = participants.findIndex(p => p.id === exp.paidBy);
+            const payer = participants[payerIndex];
             if (payer) {
-                spenderTotals[payer.name] = (spenderTotals[payer.name] || 0) + exp.amount;
+                if (!spenderTotals[payer.name]) {
+                    spenderTotals[payer.name] = { amount: 0, hue: getParticipantHue(payerIndex) };
+                }
+                spenderTotals[payer.name].amount += exp.amount;
             }
         });
 
         return Object.entries(spenderTotals)
-            .map(([name, amount]) => ({
+            .map(([name, data]) => ({
                 name,
-                amount: parseFloat(amount.toFixed(2))
+                amount: parseFloat(data.amount.toFixed(2)),
+                hue: data.hue
             }))
             .sort((a, b) => b.amount - a.amount)
             .slice(0, 5);
@@ -213,7 +219,13 @@ const Analytics = ({ expenses, participants }) => {
                                     contentStyle={tooltipStyle}
                                     formatter={(value) => [`$${value}`, 'Total Spent']}
                                 />
-                                <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                                    {
+                                        topSpenders.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={`var(--${entry.hue})`} />
+                                        ))
+                                    }
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     </div>

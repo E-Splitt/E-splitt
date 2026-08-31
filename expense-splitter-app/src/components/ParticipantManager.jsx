@@ -260,10 +260,10 @@ const ParticipantManager = ({
 
                     <div className="space-y-2">
                         {participants.map(person => (
-                            <div key={person.id} className="flex items-center justify-between p-3 rounded-lg transition-colors" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
+                            <div key={person.id} className="person-row">
                                 {activeTab === 'participants' && editingDetails?.id === person.id ? (
                                     // Edit Mode
-                                    <div className="flex-1 flex gap-2 items-center">
+                                    <div className="flex-1 flex gap-2 items-center w-full">
                                         <div className="flex-1 space-y-2">
                                             <input
                                                 type="text"
@@ -284,15 +284,14 @@ const ParticipantManager = ({
                                         <div className="flex flex-col gap-1">
                                             <button
                                                 onClick={() => handleUpdateParticipant(person.id)}
-                                                className="p-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200"
+                                                className="icon-btn"
                                                 title="Save"
                                             >
                                                 <Check size={16} />
                                             </button>
                                             <button
                                                 onClick={() => setEditingDetails(null)}
-                                                className="p-1.5 rounded"
-                                                style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)' }}
+                                                className="icon-btn"
                                                 title="Cancel"
                                             >
                                                 <X size={16} />
@@ -304,14 +303,14 @@ const ParticipantManager = ({
                                     <>
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
                                             <div
-                                                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
-                                                style={{ backgroundColor: person.color || '#6366f1' }}
+                                                className="ledger-avatar"
+                                                style={{ backgroundColor: person.color || '#6366f1', color: '#fff' }}
                                             >
                                                 {person.name.charAt(0).toUpperCase()}
                                             </div>
-                                            <div className="flex-1 min-w-0">
+                                            <div className="person-info">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>{person.name}</span>
+                                                    <span className="person-name">{person.name}</span>
                                                     {person.email && <Mail size={12} style={{ color: 'var(--text-muted)' }} className="flex-shrink-0" title={person.email} />}
                                                     {person.claimed_by && (
                                                         <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full flex-shrink-0">
@@ -324,12 +323,11 @@ const ParticipantManager = ({
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1 ml-2">
+                                        <div className="person-actions">
                                             {onEdit && (
                                                 <button
                                                     onClick={() => startEditing(person)}
-                                                    className="p-2 rounded-lg transition-colors flex-shrink-0 hover:opacity-75"
-                                                    style={{ color: 'var(--text-muted)' }}
+                                                    className="icon-btn"
                                                     title="Edit participant"
                                                 >
                                                     <Edit2 size={16} />
@@ -337,7 +335,7 @@ const ParticipantManager = ({
                                             )}
                                             <button
                                                 onClick={() => onRemove(person.id)}
-                                                className="text-red-400 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                                className="icon-btn danger"
                                                 title="Remove participant"
                                             >
                                                 <Trash2 size={16} />

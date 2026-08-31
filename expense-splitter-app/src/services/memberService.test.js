@@ -1,16 +1,15 @@
-// Jest test for addGroupMember flow (mocking Supabase RPC)
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { addGroupMember } from './memberService';
+import { supabase } from '../supabase';
 
 // Mock supabase client
-jest.mock('../supabase', () => {
+vi.mock('../supabase', () => {
     return {
         supabase: {
-            rpc: jest.fn()
+            rpc: vi.fn()
         }
     };
 });
-
-const { supabase } = require('../supabase');
 
 describe('addGroupMember', () => {
     const groupId = 'g_test123';
@@ -18,7 +17,7 @@ describe('addGroupMember', () => {
     const userId = '1111-2222-3333-4444';
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     it('adds a member when user exists', async () => {

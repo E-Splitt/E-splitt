@@ -56,13 +56,13 @@ function UserProfileModal({ isOpen, onSave, initialProfile = null }) {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 modal-overlay">
+            <div className="rounded-xl shadow-xl w-full max-w-md overflow-hidden themed-card">
                 <div className="p-6">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                    <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
                         {initialProfile ? 'Edit Profile' : 'Welcome!'}
                     </h2>
-                    <p className="text-gray-600 mb-6">
+                    <p className="mb-6" style={{ color: 'var(--text-muted)' }}>
                         {initialProfile
                             ? 'Update your profile details.'
                             : 'Please set up your profile to continue. This will be used to identify you in the group.'}
@@ -70,12 +70,12 @@ function UserProfileModal({ isOpen, onSave, initialProfile = null }) {
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                                 Your Name
                             </label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <User size={20} className="text-gray-400" />
+                                    <User size={20} style={{ color: 'var(--text-muted)' }} />
                                 </div>
                                 <input
                                     type="text"
@@ -84,16 +84,16 @@ function UserProfileModal({ isOpen, onSave, initialProfile = null }) {
                                         setName(e.target.value);
                                         setError('');
                                     }}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                    className="themed-input w-full pl-10 pr-4 py-2 rounded-lg"
                                     placeholder="Enter your name"
                                     autoFocus
                                 />
                             </div>
-                            {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+                            {error && <p className="text-sm mt-1" style={{ color: 'var(--accent-red)' }}>{error}</p>}
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                                 Choose Avatar Color
                             </label>
                             <div className="grid grid-cols-6 gap-2">

@@ -127,12 +127,23 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     const calculateShares = () => {
         const shares = {};
         const amountFloat = parseFloat(amount) || 0;
+        const totalCents = Math.round(amountFloat * 100);
         const selected = selectedParticipants;
 
         if (splitType === 'equal') {
             if (selected.length > 0) {
-                const share = amountFloat / selected.length;
-                selected.forEach(userId => shares[userId] = share);
+                const baseShareCents = Math.floor(totalCents / selected.length);
+                let remainderCents = totalCents % selected.length;
+                
+                // Distribute remainder pennies to first users
+                selected.forEach(userId => {
+                    let shareCents = baseShareCents;
+                    if (remainderCents > 0) {
+                        shareCents += 1;
+                        remainderCents -= 1;
+                    }
+                    shares[userId] = shareCents / 100;
+                });
             }
         } else if (splitType === 'exact') {
             selected.forEach(userId => {
@@ -146,9 +157,9 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     // Remainder calculation for exact splits
     const splitRemainder = useMemo(() => {
         if (splitType !== 'exact') return null;
-        const amountFloat = parseFloat(amount) || 0;
-        const totalSplit = selectedParticipants.reduce((sum, uid) => sum + (parseFloat(customSplits[uid]) || 0), 0);
-        return amountFloat - totalSplit;
+        const amountCents = Math.round((parseFloat(amount) || 0) * 100);
+        const totalSplitCents = selectedParticipants.reduce((sum, uid) => sum + Math.round((parseFloat(customSplits[uid]) || 0) * 100), 0);
+        return (amountCents - totalSplitCents) / 100;
     }, [splitType, amount, customSplits, selectedParticipants]);
 
     const handleSubmit = async (e) => {
@@ -165,10 +176,11 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         }
 
         const shares = calculateShares();
-        const totalShares = Object.values(shares).reduce((sum, val) => sum + val, 0);
+        const totalSharesCents = Object.values(shares).reduce((sum, val) => sum + Math.round(val * 100), 0);
+        const amountCents = Math.round(amountFloat * 100);
 
-        if (splitType === 'exact' && Math.abs(totalShares - amountFloat) > 0.01) {
-            setErrors(prev => ({ ...prev, splits: `Shares must equal $${amountFloat.toFixed(2)}. Current: $${totalShares.toFixed(2)}` }));
+        if (splitType === 'exact' && totalSharesCents !== amountCents) {
+            setErrors(prev => ({ ...prev, splits: `Shares must equal $${amountFloat.toFixed(2)}. Current: $${(totalSharesCents / 100).toFixed(2)}` }));
             return;
         }
 
@@ -225,7 +237,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
 
     return (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4 modal-overlay" onClick={onClose}>
-            <div className="rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto themed-card" onClick={(e) => e.stopPropagation()}>
+            <div className="rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto themed-card p-0" onClick={(e) => e.stopPropagation()}>
                 <div className="sticky top-0 p-6 flex justify-between items-center z-10 glass-strong" style={{ borderBottom: '1px solid var(--border-primary)' }}>
                     <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                         {isEditing ? <><Edit size={20} /> Edit Expense</> : <><Plus size={20} /> Add New Expense</>}
@@ -390,26 +402,16 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                                 {allSelected ? 'Deselect All' : 'Select All'}
                             </button>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-wrap gap-2">
                             {participants.map(person => (
-                                <label key={person.id} className="flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all" style={{
-                                    border: `1px solid ${selectedParticipants.includes(person.id) ? 'var(--accent-indigo)' : 'var(--border-primary)'}`,
-                                    backgroundColor: selectedParticipants.includes(person.id) ? 'var(--bg-card-hover)' : 'transparent'
-                                }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedParticipants.includes(person.id)}
-                                        onChange={() => handleParticipantToggle(person.id)}
-                                        className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                                    />
-                                    <div
-                                        className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                                        style={{ backgroundColor: person.color || '#6366f1' }}
-                                    >
-                                        {person.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{person.name}</span>
-                                </label>
+                                <button
+                                    key={person.id}
+                                    type="button"
+                                    onClick={() => handleParticipantToggle(person.id)}
+                                    className={`person-chip ${selectedParticipants.includes(person.id) ? 'selected' : ''}`}
+                                >
+                                    {person.name}
+                                </button>
                             ))}
                         </div>
                         {errors.participants && <p className="text-red-400 text-xs mt-1">{errors.participants}</p>}

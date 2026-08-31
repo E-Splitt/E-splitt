@@ -97,7 +97,6 @@ export const deleteGroupInSupabase = async (groupId) => {
 // Listen to all groups (Filtered by User ID for security)
 // Listen to all groups (Filtered by User ID for security)
 export const subscribeToGroups = (userId, callback) => {
-    // Helper to fetch and filter
     const fetchUserGroups = async () => {
         // If userId is passed, use it, otherwise try to get from auth (fallback)
         let currentUserId = userId;
@@ -108,10 +107,23 @@ export const subscribeToGroups = (userId, callback) => {
 
         if (!currentUserId) return;
 
-        const { data, error } = await supabase
-            .from(GROUPS_TABLE)
-            .select('*')
-            .eq('user_id', currentUserId); // Explicitly fetch only MY groups
+        // 1. Get groups where user is a member
+        const { data: memberGroups } = await supabase
+            .from('group_members')
+            .select('group_id')
+            .eq('user_id', currentUserId);
+            
+        const memberGroupIds = memberGroups ? memberGroups.map(mg => mg.group_id) : [];
+
+        // 2. Fetch owned groups OR member groups
+        let query = supabase.from(GROUPS_TABLE).select('*');
+        if (memberGroupIds.length > 0) {
+            query = query.or(`user_id.eq.${currentUserId},group_id.in.(${memberGroupIds.join(',')})`);
+        } else {
+            query = query.eq('user_id', currentUserId);
+        }
+
+        const { data, error } = await query;
 
         if (!error && data) {
             const groups = data.map(row => row.data);

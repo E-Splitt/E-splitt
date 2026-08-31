@@ -41,24 +41,25 @@ const PinModal = ({ isOpen, onClose, onSubmit, mode = 'enter', groupName }) => {
     };
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" onClick={handleClose}>
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4 modal-overlay" onClick={handleClose}>
+            <div className="rounded-xl shadow-xl max-w-md w-full themed-card" onClick={(e) => e.stopPropagation()}>
                 <div className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            {mode === 'set' ? <Lock size={24} /> : <Unlock size={24} />}
+                        <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                            {mode === 'set' ? <Lock size={24} style={{ color: 'var(--accent-indigo)' }} /> : <Unlock size={24} style={{ color: 'var(--accent-indigo)' }} />}
                             {mode === 'set' ? 'Set PIN' : 'Enter PIN'}
                         </h2>
                         <button
                             onClick={handleClose}
-                            className="text-gray-400 hover:text-gray-600 transition-colors"
+                            className="transition-colors hover:opacity-75 p-1 rounded-lg"
+                            style={{ color: 'var(--text-muted)' }}
                         >
                             <X size={24} />
                         </button>
                     </div>
 
                     {groupName && (
-                        <p className="text-sm text-gray-600 mb-4">
+                        <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
                             {mode === 'set'
                                 ? `Protect "${groupName}" with a 4-digit PIN`
                                 : `"${groupName}" is locked. Enter PIN to access.`
@@ -68,7 +69,7 @@ const PinModal = ({ isOpen, onClose, onSubmit, mode = 'enter', groupName }) => {
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                                 {mode === 'set' ? 'Create PIN (4 digits)' : 'Enter PIN'}
                             </label>
                             <input
@@ -77,7 +78,7 @@ const PinModal = ({ isOpen, onClose, onSubmit, mode = 'enter', groupName }) => {
                                 maxLength={4}
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                                className="w-full p-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="themed-input w-full p-3 rounded-lg text-center text-2xl tracking-widest"
                                 placeholder="••••"
                                 autoFocus
                             />
@@ -85,7 +86,7 @@ const PinModal = ({ isOpen, onClose, onSubmit, mode = 'enter', groupName }) => {
 
                         {mode === 'set' && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                                     Confirm PIN
                                 </label>
                                 <input
@@ -94,14 +95,14 @@ const PinModal = ({ isOpen, onClose, onSubmit, mode = 'enter', groupName }) => {
                                     maxLength={4}
                                     value={confirmPin}
                                     onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                                    className="w-full p-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    className="themed-input w-full p-3 rounded-lg text-center text-2xl tracking-widest"
                                     placeholder="••••"
                                 />
                             </div>
                         )}
 
                         {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                            <div className="px-4 py-3 rounded-lg text-sm" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)' }}>
                                 {error}
                             </div>
                         )}
@@ -110,7 +111,8 @@ const PinModal = ({ isOpen, onClose, onSubmit, mode = 'enter', groupName }) => {
                             <button
                                 type="button"
                                 onClick={handleClose}
-                                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                className="flex-1 px-4 py-3 rounded-lg transition-colors font-medium"
+                                style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-primary)' }}
                             >
                                 Cancel
                             </button>

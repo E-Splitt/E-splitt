@@ -75,6 +75,8 @@ import {
   notifyPeriodClosed
 } from './utils/notifications';
 
+import { lockGroup } from './utils/crypto';
+
 function App() {
   const { user, loading, signOut } = useAuth();
   const location = useLocation();
@@ -123,27 +125,52 @@ function App() {
 
   // Effects
   useEffect(() => {
+    const joinGroupId = location.state?.joinGroupId;
+    if (joinGroupId && joinGroupId !== currentGroupId) {
+      setCurrentGroupId(joinGroupId);
+      localStorage.setItem('lastGroupId', joinGroupId);
+      if (user?.email) {
+        addGroupMember(joinGroupId, user.email, 'member').catch(console.error);
+      }
+    }
+  }, [location.state, user, currentGroupId]);
+
+  useEffect(() => {
     if (user) {
       const unsubscribe = subscribeToGroups(user.id, (updatedGroups) => {
         setGroups(updatedGroups);
 
         // Auto-select group
-        if (!currentGroupId && updatedGroups.length > 0) {
-          // Check for last accessed group
-          const lastGroupId = localStorage.getItem('lastGroupId');
-          const targetGroup = updatedGroups.find(g => g.id === lastGroupId) || updatedGroups[0];
-          setCurrentGroupId(targetGroup.id);
-        } else if (updatedGroups.length === 0) {
-          // Auto-create welcome group if absolutely no groups exist
-          // FIX: Pass object with name
-          createGroupInSupabase({ name: 'Welcome Group' }).then(newGroup => {
-            setCurrentGroupId(newGroup.id);
-          }).catch(console.error);
+        if (!currentGroupId) {
+          const joinGroupId = location.state?.joinGroupId;
+          if (joinGroupId) {
+            const targetGroup = updatedGroups.find(g => g.id === joinGroupId);
+            if (targetGroup) {
+              setCurrentGroupId(targetGroup.id);
+              localStorage.setItem('lastGroupId', targetGroup.id);
+            } else {
+              setCurrentGroupId(joinGroupId);
+              localStorage.setItem('lastGroupId', joinGroupId);
+              if (user.email) {
+                addGroupMember(joinGroupId, user.email, 'member').catch(console.error);
+              }
+            }
+          } else if (updatedGroups.length > 0) {
+            // Check for last accessed group
+            const lastGroupId = localStorage.getItem('lastGroupId');
+            const targetGroup = updatedGroups.find(g => g.id === lastGroupId) || updatedGroups[0];
+            setCurrentGroupId(targetGroup.id);
+          } else {
+            // Auto-create welcome group if absolutely no groups exist
+            createGroupInSupabase({ name: 'Welcome Group' }).then(newGroup => {
+              setCurrentGroupId(newGroup.id);
+            }).catch(console.error);
+          }
         }
       });
       return () => unsubscribe();
     }
-  }, [user, currentGroupId]);
+  }, [user, currentGroupId, location.state]);
 
   useEffect(() => {
     if (!currentGroupId) {
@@ -263,9 +290,13 @@ function App() {
     const group = groups.find(g => g.id === groupId);
     if (group) {
       setShareGroupData({
+        ...group,
+        id: group.id,
         name: group.name,
-        code: group.shareCode || 'GENERATING...',
-        link: window.location.origin + '/join/' + (group.shareCode || '')
+        code: group.shareCode || group.id,
+        link: window.location.origin + '/join/' + (group.id || group.shareCode || ''),
+        participants,
+        expenses
       });
       setIsShareModalOpen(true);
     }
@@ -666,20 +697,63 @@ function App() {
 
   if (!user) return <AuthPage />;
 
+  const nav = [
+    { key: 'dashboard', icon: TrendingUp, label: 'Dashboard' },
+    { key: 'participants', icon: Users, label: `People (${participants.length})` },
+    { key: 'activity', icon: Clock, label: 'Activity' },
+    { key: 'chat', icon: MessageSquare, label: 'Chat' },
+    { key: 'analytics', icon: BarChart3, label: 'Stats' },
+    { key: 'archive', icon: Calendar, label: 'Archive' },
+  ];
+
   return (
-    <div className="min-h-screen transition-colors pb-bottom-nav" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-      <header className="glass-strong sticky top-0 z-30">
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 cursor-pointer select-none" onClick={handleLogoClick}>
-                <ESplitLogo size={40} />
-                <div>
-                  <h1 className="text-xl font-bold" style={{ color: 'var(--accent-indigo)' }}>E-Split</h1>
-                  <p className="text-xs hidden sm:block" style={{ color: 'var(--text-muted)' }}>Split expenses easily</p>
-                </div>
+    <div className={darkMode ? 'dark' : ''}>
+      <div className="shell">
+        {/* ---------- desktop side ledger ---------- */}
+        <aside className="side">
+          <div className="side-brand cursor-pointer" onClick={handleLogoClick}>
+            <div className="side-mark">e/</div>
+            <div>
+              <div className="side-title">E-Split</div>
+              <div className="side-sub truncate max-w-[120px]">
+                {groups.find(g => g.id === currentGroupId)?.name || 'No Group'}
               </div>
-              <div className="hidden lg:block pl-4 ml-2" style={{ borderLeft: '1px solid var(--border-primary)' }}>
+            </div>
+          </div>
+
+          <nav className="side-nav">
+            {nav.map((n) => (
+              <button
+                key={n.key}
+                className={`side-tab ${activeTab === n.key ? "active" : ""}`}
+                onClick={() => setActiveTab(n.key)}
+              >
+                <n.icon size={17} />
+                <span>{n.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <button className="theme-btn" onClick={() => setDarkMode((d) => !d)}>
+            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            {darkMode ? "Light mode" : "Dark mode"}
+          </button>
+          
+          <button onClick={signOut} className="flex items-center gap-2 mt-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors w-full">
+            <LogOut size={15} /> Logout
+          </button>
+        </aside>
+
+        {/* ---------- main column ---------- */}
+        <div className="main">
+          <header className="topbar">
+            <button className="icon-btn only-mobile" onClick={() => setIsMobileMenuOpen((v) => !v)}>
+              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            
+            <div className="flex gap-4 items-center">
+              <div>
+                <span className="crumb">Group</span>
                 <GroupSelector
                   groups={groups}
                   currentGroup={currentGroupId}
@@ -691,217 +765,141 @@ function App() {
                   onSetPin={handleSetPin}
                 />
               </div>
-            </div>
-            {/* Period Selector */}
-            {currentGroupId && (
-              <div className="hidden lg:block pl-4 ml-2" style={{ borderLeft: '1px solid var(--border-primary)' }}>
-                <PeriodSelector
-                  periods={periods}
-                  currentPeriod={currentPeriodId}
-                  onSelectPeriod={setCurrentPeriodId}
-                  onCreatePeriod={() => createPeriod(currentGroupId).catch(console.error)}
-                />
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="hidden sm:flex items-center gap-2">
-              <button
-                onClick={() => setIsExpenseModalOpen(true)}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition-all hover:scale-105"
-              >
-                <Plus size={20} />
-                <span className="hidden md:inline">Add Expense</span>
-              </button>
-              {/* Dark mode toggle */}
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-2 rounded-lg transition-all hover:scale-110 theme-transition"
-                style={{ color: 'var(--text-secondary)', backgroundColor: 'var(--bg-card-hover)' }}
-                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
-              <div className="flex items-center gap-2 pl-2" style={{ borderLeft: '1px solid var(--border-primary)' }}>
-                <span className="text-sm hidden lg:inline" style={{ color: 'var(--text-secondary)' }}>{user?.email}</span>
-                <button onClick={signOut} className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Logout</button>
-              </div>
+              
+              {currentGroupId && (
+                <div className="hidden sm:block">
+                  <span className="crumb">Period</span>
+                  <PeriodSelector
+                    periods={periods}
+                    currentPeriod={currentPeriodId}
+                    onSelectPeriod={setCurrentPeriodId}
+                    onCreatePeriod={() => createPeriod(currentGroupId).catch(console.error)}
+                  />
+                </div>
+              )}
             </div>
 
-            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="sm:hidden p-2 rounded-lg" style={{ color: 'var(--text-secondary)' }}>
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            <button className="add-btn" onClick={() => setIsExpenseModalOpen(true)}>
+              <Plus size={17} /> <span className="only-desktop">Add expense</span>
             </button>
-          </div>
+          </header>
 
           {isMobileMenuOpen && (
-            <div className="sm:hidden py-4 space-y-3" style={{ borderTop: '1px solid var(--border-primary)' }}>
-              <GroupSelector
-                groups={groups}
-                currentGroup={currentGroupId}
-                onSelectGroup={handleSelectGroup}
-                onCreateGroup={handleCreateGroup}
-                onEditGroup={handleEditGroup}
-                onDeleteGroup={handleDeleteGroup}
-                onShareGroup={handleShareGroup}
-                onSetPin={handleSetPin}
-              />
-              <div className="flex gap-2">
-                <button onClick={() => { setIsExpenseModalOpen(true); setIsMobileMenuOpen(false); }} className="flex-1 bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2">
-                  <Plus size={20} /> Add Expense
-                </button>
+            <div className="mobile-nav-drawer">
+              {nav.map((n) => (
                 <button
-                  onClick={() => setDarkMode(!darkMode)}
-                  className="p-3 rounded-lg theme-transition"
-                  style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
+                  key={n.key}
+                  className={`side-tab ${activeTab === n.key ? "active" : ""}`}
+                  onClick={() => { setActiveTab(n.key); setIsMobileMenuOpen(false); }}
                 >
-                  {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+                  <n.icon size={17} /> <span>{n.label}</span>
+                </button>
+              ))}
+              <div className="mt-2 pt-2 border-t border-themed">
+                <button className="theme-btn w-full" onClick={() => setDarkMode((d) => !d)}>
+                  {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+                  {darkMode ? "Light mode" : "Dark mode"}
+                </button>
+                <button onClick={signOut} className="flex justify-center items-center gap-2 mt-2 px-3 py-3 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors w-full">
+                  <LogOut size={15} /> Logout
                 </button>
               </div>
-              <button onClick={signOut} className="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Logout</button>
             </div>
           )}
 
-          {/* Desktop Tab Bar */}
-          <div className="hidden sm:flex gap-4 overflow-x-auto no-scrollbar" style={{ borderTop: '1px solid var(--border-primary)' }}>
-            {[
-              { key: 'dashboard', icon: <TrendingUp size={16} />, label: 'Dashboard' },
-              { key: 'participants', icon: <Users size={16} />, label: `Participants (${participants.length})` },
-              { key: 'activity', icon: <Clock size={16} />, label: 'Activity' },
-              { key: 'chat', icon: <MessageSquare size={16} />, label: 'Chat' },
-              { key: 'analytics', icon: <BarChart3 size={16} />, label: 'Analytics' },
-              { key: 'archive', icon: <Calendar size={16} />, label: 'Archive' },
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-3 font-medium text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === tab.key ? 'border-indigo-600' : 'border-transparent hover:border-gray-300'}`}
-                style={{ color: activeTab === tab.key ? 'var(--accent-indigo)' : 'var(--text-muted)' }}
-              >
-                <div className="flex items-center gap-2">{tab.icon} {tab.label}</div>
-              </button>
-            ))}
-          </div>
+          <main className="content">
+            <AnimatePresence mode="wait">
+              {activeTab === 'dashboard' && (
+                <motion.div
+                  key="dashboard"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Dashboard</h2>
+                      <div className="flex gap-2">
+                        <ExportButton expenses={periodExpenses} participants={participants} />
+                        <button
+                          onClick={() => setIsClosePeriodModalOpen(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+                          style={{ backgroundColor: 'var(--moss-soft)', color: 'var(--moss)' }}
+                        >
+                          <Calendar size={16} />
+                          Settle & Archive
+                        </button>
+                      </div>
+                    </div>
+
+                    <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} currentUserId={user?.id} expenses={periodExpenses} onSettle={(fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })} />
+                  </div>
+
+                  {/* Quick Add Expense - Visible on Desktop/Tablet */}
+                  <div className="hidden sm:block mb-6">
+                    <QuickAddExpense
+                      onAdd={handleAddExpense}
+                      participants={participants}
+                      currentUserId={user?.id}
+                    />
+                  </div>
+
+                  <div className="mb-6">
+                    <ExpenseList expenses={periodExpenses} participants={participants} onDelete={handleDeleteExpense} onEdit={handleOpenEditExpense} />
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'participants' && (
+                <motion.div key="participants" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-2xl">
+                  <ParticipantManager participants={participants} currentUserEmail={user?.email} onAdd={handleAddParticipant} onEdit={handleEditParticipant} onRemove={handleRemoveParticipant} />
+                </motion.div>
+              )}
+              {activeTab === 'activity' && (
+                <motion.div key="activity" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-4xl">
+                  <ActivityLog activities={activityLog} onUndo={handleUndo} />
+                </motion.div>
+              )}
+              {activeTab === 'chat' && (
+                <motion.div key="chat" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-4xl">
+                  <Chat messages={chatMessages} currentUser={{ id: user?.id, name: user?.email?.split('@')[0] }} onSendMessage={handleSendMessage} />
+                </motion.div>
+              )}
+              {activeTab === 'analytics' && (
+                <motion.div key="analytics" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}>
+                  <Analytics expenses={periodExpenses} participants={participants} />
+                </motion.div>
+              )}
+              {activeTab === 'archive' && (
+                <motion.div key="archive" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}>
+                  <PeriodArchive periods={periods} participants={participants} expenses={expenses} onViewDetails={setViewPeriodDetails} onDelete={handleDeletePeriod} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </main>
         </div>
-      </header>
 
-      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <AnimatePresence mode="wait">
-          {activeTab === 'dashboard' && (
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className="mb-8">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Dashboard</h2>
-                  <div className="flex gap-2">
-                    <ExportButton expenses={periodExpenses} participants={participants} />
-                    <button
-                      onClick={() => setIsClosePeriodModalOpen(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors"
-                    >
-                      <Calendar size={16} />
-                      Settle & Archive
-                    </button>
-                  </div>
-                </div>
-
-                <div className="themed-card rounded-xl p-4 mb-4" style={{ background: darkMode ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))' : 'linear-gradient(135deg, #eef2ff, #f5f3ff)' }}>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div><div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Total Expenses</div><div className="text-2xl font-bold" style={{ color: 'var(--accent-indigo)' }}>${totalExpenses.toFixed(2)}</div></div>
-                    <div><div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Per Person (Avg)</div><div className="text-2xl font-bold text-purple-500">${avgPerPerson.toFixed(2)}</div><div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Based on {activeParticipants.length} active</div></div>
-                    <div><div className="text-sm" style={{ color: 'var(--text-secondary)' }}>Transactions</div><div className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{periodExpenses.filter(e => !e.isSettlement).length}</div></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Add Expense - Visible on Desktop/Tablet */}
-              <div className="hidden sm:block">
-                <QuickAddExpense
-                  onAdd={handleAddExpense}
-                  participants={participants}
-                  currentUserId={user?.id}
-                />
-              </div>
-
-              {/* Mobile "Add Expense" Button (Stick to button for mobile to save space) */}
-              <button
-                onClick={() => setIsExpenseModalOpen(true)}
-                className="sm:hidden w-full bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 shadow-md mb-6 hover:bg-indigo-700 transition-colors"
-              >
-                <Plus size={20} /> Add Expense
-              </button>
-              <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} currentUserId={user?.id} />
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
-                  <ExpenseList expenses={periodExpenses} participants={participants} onDelete={handleDeleteExpense} onEdit={handleOpenEditExpense} />
-                </div>
-                <div className="lg:col-span-1">
-                  <div className="sticky top-24"><SettleUp balances={balances} participants={participants} onOpenSettleModal={handleOpenSettleModal} /></div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {activeTab === 'participants' && (
-            <motion.div key="participants" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-2xl">
-              <ParticipantManager participants={participants} currentUserEmail={user?.email} onAdd={handleAddParticipant} onEdit={handleEditParticipant} onRemove={handleRemoveParticipant} />
-            </motion.div>
-          )}
-          {activeTab === 'activity' && (
-            <motion.div key="activity" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-4xl">
-              <ActivityLog activities={activityLog} onUndo={handleUndo} />
-            </motion.div>
-          )}
-          {activeTab === 'chat' && (
-            <motion.div key="chat" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-4xl">
-              <Chat messages={chatMessages} currentUser={{ id: user?.id, name: user?.email?.split('@')[0] }} onSendMessage={handleSendMessage} />
-            </motion.div>
-          )}
-          {activeTab === 'analytics' && (
-            <motion.div key="analytics" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}>
-              <Analytics expenses={periodExpenses} participants={participants} />
-            </motion.div>
-          )}
-          {activeTab === 'archive' && (
-            <motion.div key="archive" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}>
-              <PeriodArchive periods={periods} participants={participants} expenses={expenses} onViewDetails={setViewPeriodDetails} onDelete={handleDeletePeriod} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-30 glass-strong" style={{ borderTop: '1px solid var(--border-primary)' }}>
-        <div className="flex justify-around items-center h-16 px-1">
-          {[
-            { key: 'dashboard', icon: <TrendingUp size={20} />, label: 'Home' },
-            { key: 'participants', icon: <Users size={20} />, label: 'People' },
-            { key: 'activity', icon: <Clock size={20} />, label: 'Activity' },
-            { key: 'chat', icon: <MessageSquare size={20} />, label: 'Chat' },
-            { key: 'analytics', icon: <BarChart3 size={20} />, label: 'Stats' },
-          ].map(tab => (
+        {/* ---------- mobile bottom nav ---------- */}
+        <nav className="bottom-nav only-mobile">
+          {nav.map((n) => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all ${activeTab === tab.key ? 'scale-110' : 'opacity-60'}`}
-              style={{ color: activeTab === tab.key ? 'var(--accent-indigo)' : 'var(--text-muted)' }}
+              key={n.key}
+              className={`bottom-tab ${activeTab === n.key ? "active" : ""}`}
+              onClick={() => setActiveTab(n.key)}
             >
-              {tab.icon}
-              <span className="text-[10px] font-medium">{tab.label}</span>
+              <n.icon size={19} />
+              <span>{n.label}</span>
             </button>
           ))}
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => { setIsExpenseModalOpen(false); setEditExpense(null); }} onAdd={handleAddExpense} onEdit={handleEditExpense} participants={participants} editExpense={editExpense} />
       <SettleUpModal isOpen={isSettleModalOpen} onClose={() => { setIsSettleModalOpen(false); setSettlePrefill(null); }} onSettle={handleSettle} participants={participants} prefill={settlePrefill} />
       <ShareGroupModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} groupData={shareGroupData} />
       <PinModal isOpen={isPinModalOpen} onClose={() => { setIsPinModalOpen(false); setPinModalGroupId(null); }} onSubmit={handlePinSubmit} mode={pinModalMode} groupName={groups.find(g => g.id === pinModalGroupId)?.name} />
-      <InviteMemberModal isOpen={isInviteMemberModalOpen} onClose={() => setIsInviteMemberModalOpen(false)} onInvite={handleInviteMember} groupName={groups.find(g => g.id === currentGroupId)?.name || 'this group'} />
+      <InviteMemberModal isOpen={isInviteMemberModalOpen} onClose={() => setIsInviteMemberModalOpen(false)} onInvite={handleInviteMember} groupName={groups.find(g => g.id === currentGroupId)?.name || 'this group'} groupId={currentGroupId} />
       <DevDashboard isOpen={isDevModalOpen} onClose={() => setIsDevModalOpen(false)} />
 
       {/* Close Period / Archive Modal */}

@@ -103,38 +103,34 @@ const ActivityLog = ({ activities, onUndo }) => {
                         <p className="text-sm">{searchQuery ? 'Try a different search term' : 'Changes will appear here'}</p>
                     </div>
                 ) : (
-                    <div>
+                    <div className="activity-feed">
                         {filteredActivities.map((activity, index) => {
                             const colorClass = getActivityColor(activity);
 
                             return (
-                                <div key={activity.id} className="p-4 transition-colors theme-transition" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
-                                    <div className="flex items-start gap-3">
-                                        <div className={`p-2 rounded-lg ${colorClass}`}>
-                                            {getActivityIcon(activity)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                                                {activity.description}
-                                            </p>
-                                            <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                                                <span>{activity.actorName}</span>
-                                                <span>•</span>
-                                                <span>{formatTimestamp(activity.timestamp)}</span>
-                                            </div>
-                                        </div>
-                                        {canUndo(index, activity) && (
-                                            <button
-                                                onClick={() => onUndo(activity)}
-                                                className="p-2 rounded-lg transition-colors flex items-center gap-1 text-sm"
-                                                style={{ color: 'var(--accent-indigo)' }}
-                                                title="Undo this action"
-                                            >
-                                                <RotateCcw size={14} />
-                                                Undo
-                                            </button>
-                                        )}
+                                <div key={activity.id} className="activity-item">
+                                    <div className={`activity-icon ${colorClass}`}>
+                                        {getActivityIcon(activity)}
                                     </div>
+                                    <div className="activity-content">
+                                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                                            {activity.description}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                            <span>{activity.actorName}</span>
+                                            <span>•</span>
+                                            <span>{formatTimestamp(activity.timestamp)}</span>
+                                        </div>
+                                    </div>
+                                    {canUndo(index, activity) && (
+                                        <button
+                                            onClick={() => onUndo(activity)}
+                                            className="icon-btn"
+                                            title="Undo this action"
+                                        >
+                                            <RotateCcw size={14} />
+                                        </button>
+                                    )}
                                 </div>
                             );
                         })}

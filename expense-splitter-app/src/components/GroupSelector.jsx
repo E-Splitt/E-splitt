@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Plus, X, Check, Edit2, Trash2, Share2, Lock, Unlock } from 'lucide-react';
+import { Users, Plus, X, Check, Edit2, Trash2, Share2, Lock, Unlock, Link as LinkIcon } from 'lucide-react';
 import { getUnlockedGroups } from '../utils/crypto';
 
 const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onEditGroup, onDeleteGroup, onShareGroup, onSetPin }) => {
@@ -10,6 +10,8 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
     const [editGroupName, setEditGroupName] = useState('');
     const [showMenu, setShowMenu] = useState(false);
     const [showGroupList, setShowGroupList] = useState(false); // New state for custom dropdown
+    const [isJoining, setIsJoining] = useState(false);
+    const [joinLink, setJoinLink] = useState('');
 
     const handleCreate = () => {
         if (newGroupName.trim()) {
@@ -17,6 +19,18 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
             setNewGroupName('');
             setNewGroupPin('');
             setIsCreating(false);
+        }
+    };
+
+    const handleJoin = () => {
+        let url = joinLink.trim();
+        if (!url) return;
+        
+        if (url.includes('/join/')) {
+            window.location.href = url;
+        } else {
+            // Assume it's just the group code
+            window.location.href = '/join/' + url;
         }
     };
 
@@ -48,17 +62,15 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
     const currentGroupObj = groups.find(g => g.id === currentGroup);
 
     return (
-        <div className="relative">
+        <div className="relative inline-block">
             <div className="flex items-center gap-2">
-                <Users size={20} style={{ color: 'var(--text-muted)' }} />
-
                 {/* Custom Dropdown Trigger */}
                 <div className="relative">
                     <button
                         onClick={() => setShowGroupList(!showGroupList)}
-                        className="flex items-center justify-between gap-2 p-3 rounded-lg text-base font-medium min-w-[200px] max-w-[300px] transition-colors text-left themed-input"
+                        className="group-pill"
                     >
-                        <span className="truncate">
+                        <span className="truncate max-w-[200px]">
                             {currentGroupObj ? (
                                 <>
                                     {currentGroupObj.pinEnabled && (
@@ -68,14 +80,14 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                 </>
                             ) : 'Select Group'}
                         </span>
-                        <span style={{ color: 'var(--text-muted)' }} className="text-xs">▼</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>▼</span>
                     </button>
 
                     {/* Custom Dropdown List */}
                     {showGroupList && (
                         <>
                             <div className="fixed inset-0 z-10" onClick={() => setShowGroupList(false)} />
-                            <div className="absolute top-full left-0 mt-1 w-full rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto themed-card">
+                            <div className="absolute top-full left-0 mt-1 w-[280px] rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto themed-card">
                                 {groups.map(group => {
                                     const unlockedGroups = getUnlockedGroups();
                                     const isUnlocked = unlockedGroups.includes(group.id);
@@ -106,25 +118,35 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                         No groups found
                                     </div>
                                 )}
+                                
+                                <div className="border-t border-themed p-2 flex gap-1">
+                                    <button
+                                        onClick={() => { setIsCreating(true); setShowGroupList(false); }}
+                                        className="flex-1 p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center justify-center"
+                                        title="Create new group"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => { setIsJoining(true); setShowGroupList(false); }}
+                                        className="flex-1 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex items-center justify-center"
+                                        title="Join group via link"
+                                    >
+                                        <LinkIcon size={18} />
+                                    </button>
+                                </div>
                             </div>
                         </>
                     )}
                 </div>
 
                 <button
-                    onClick={() => setIsCreating(true)}
-                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                    title="Create new group"
-                >
-                    <Plus size={20} />
-                </button>
-                <button
                     onClick={() => setShowMenu(!showMenu)}
-                    className="p-2 hover:opacity-75 rounded-lg transition-colors"
+                    className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
                     style={{ color: 'var(--text-secondary)' }}
                     title="Group options"
                 >
-                    <Edit2 size={20} />
+                    <Edit2 size={16} />
                 </button>
             </div>
 
@@ -229,6 +251,52 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                     setIsCreating(false);
                                     setNewGroupName('');
                                     setNewGroupPin('');
+                                }}
+                                className="p-2 rounded-lg"
+                                style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Join Group Modal */}
+            {isJoining && (
+                <>
+                    <div className="fixed inset-0 z-10" onClick={() => {
+                        setIsJoining(false);
+                        setJoinLink('');
+                    }} />
+                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg p-4 z-20 w-80 themed-card">
+                        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Join Group</h3>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Invite Link or Group Code</label>
+                                <input
+                                    type="text"
+                                    value={joinLink}
+                                    onChange={(e) => setJoinLink(e.target.value)}
+                                    placeholder="Paste link or code here..."
+                                    className="themed-input w-full p-2 rounded-lg text-sm"
+                                    autoFocus
+                                    autoComplete="off"
+                                    onKeyPress={(e) => e.key === 'Enter' && handleJoin()}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                            <button
+                                onClick={handleJoin}
+                                className="flex-1 p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm"
+                            >
+                                Join
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsJoining(false);
+                                    setJoinLink('');
                                 }}
                                 className="p-2 rounded-lg"
                                 style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}

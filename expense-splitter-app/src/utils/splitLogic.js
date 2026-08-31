@@ -1,58 +1,75 @@
+// Convert dollars (float) to integer cents
+export const toCents = (amount) => Math.round(Number(amount) * 100);
+
+// Convert integer cents to dollars (float)
+export const toDollars = (cents) => cents / 100;
+
 // Calculate balances from expenses
 export const calculateBalances = (expenses, participants) => {
-    const balances = {};
-    const totalPaid = {};
-    const totalShare = {};
+    const balancesCents = {};
+    const totalPaidCents = {};
+    const totalShareCents = {};
 
     // Initialize for all known participants
     participants.forEach(person => {
-        balances[person.id] = 0;
-        totalPaid[person.id] = 0;
-        totalShare[person.id] = 0;
+        balancesCents[person.id] = 0;
+        totalPaidCents[person.id] = 0;
+        totalShareCents[person.id] = 0;
     });
 
     expenses.forEach(expense => {
-        // Skip settlement transactions for balance calculation
-        if (expense.isSettlement) {
-            // For settlements, adjust balances directly
-            // Ensure we handle unknown users if they appear in settlements
-            if (totalPaid[expense.paidBy] === undefined) totalPaid[expense.paidBy] = 0;
-            if (totalShare[expense.paidTo] === undefined) totalShare[expense.paidTo] = 0;
+        const amountCents = toCents(expense.amount);
 
-            totalPaid[expense.paidBy] += expense.amount;
-            totalShare[expense.paidTo] += expense.amount;
+        // Settlement transactions only affect balances, not total spending
+        if (expense.isSettlement) {
+            const payer = expense.paidBy;
+            const payee = expense.paidTo;
+            if (balancesCents[payer] === undefined) balancesCents[payer] = 0;
+            if (balancesCents[payee] === undefined) balancesCents[payee] = 0;
+
+            // Payer balance goes up (they paid debt), payee balance goes down
+            balancesCents[payer] += amountCents;
+            balancesCents[payee] -= amountCents;
             return;
         }
 
         const payer = expense.paidBy;
-        const amount = expense.amount;
 
-        // Add to payer's total paid (initialize if unknown)
-        if (totalPaid[payer] === undefined) {
-            totalPaid[payer] = 0;
-            totalShare[payer] = 0; // Initialize share too
-            balances[payer] = 0;
+        // Add to payer's total paid
+        if (totalPaidCents[payer] === undefined) {
+            totalPaidCents[payer] = 0;
+            totalShareCents[payer] = 0;
+            balancesCents[payer] = 0;
         }
-        totalPaid[payer] += amount;
+        totalPaidCents[payer] += amountCents;
 
         // Add to each person's share
         if (expense.shares) {
-            Object.entries(expense.shares).forEach(([userId, share]) => {
-                if (totalShare[userId] === undefined) {
-                    totalShare[userId] = 0;
-                    totalPaid[userId] = 0;
-                    balances[userId] = 0;
+            Object.entries(expense.shares).forEach(([userId, shareAmount]) => {
+                const shareCents = toCents(shareAmount);
+                if (totalShareCents[userId] === undefined) {
+                    totalShareCents[userId] = 0;
+                    totalPaidCents[userId] = 0;
+                    balancesCents[userId] = 0;
                 }
-                totalShare[userId] += share;
+                totalShareCents[userId] += shareCents;
             });
         }
     });
 
-    // Calculate net balance: Paid - Share
-    // We iterate over totalPaid keys to include everyone involved, even if not in participants list
-    Object.keys(totalPaid).forEach(userId => {
-        balances[userId] = totalPaid[userId] - totalShare[userId];
+    // Calculate net balance: Paid - Share (plus any settlement adjustments)
+    Object.keys(balancesCents).forEach(userId => {
+        balancesCents[userId] += (totalPaidCents[userId] || 0) - (totalShareCents[userId] || 0);
     });
+
+    // Convert back to dollars for external use
+    const balances = {};
+    const totalPaid = {};
+    const totalShare = {};
+    
+    Object.keys(balancesCents).forEach(id => balances[id] = toDollars(balancesCents[id]));
+    Object.keys(totalPaidCents).forEach(id => totalPaid[id] = toDollars(totalPaidCents[id]));
+    Object.keys(totalShareCents).forEach(id => totalShare[id] = toDollars(totalShareCents[id]));
 
     return { balances, totalPaid, totalShare };
 };
@@ -62,20 +79,18 @@ export const calculateSettlements = (balances, participants) => {
     const debtors = [];
     const creditors = [];
 
+    // Work strictly in cents to avoid float drift during matching
     Object.entries(balances).forEach(([userId, amount]) => {
-        // Find person or create a placeholder if unknown
-        let person = participants.find(p => p.id === userId);
-        if (!person) {
-            person = { id: userId, name: 'Unknown', color: '#9ca3af' };
-        }
-
-        // Only include people who actually have a balance (participated in expenses)
-        if (amount < -0.01) debtors.push({ user: person, amount });
-        if (amount > 0.01) creditors.push({ user: person, amount });
+        const amountCents = toCents(amount);
+        let person = participants.find(p => p.id === userId) || { id: userId, name: 'Unknown', color: '#9ca3af' };
+        
+        if (amountCents < 0) debtors.push({ user: person, amount: amountCents });
+        if (amountCents > 0) creditors.push({ user: person, amount: amountCents });
     });
 
-    debtors.sort((a, b) => a.amount - b.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
+    // Stable sort: primary by amount, secondary by ID string to prevent jumping settlements
+    debtors.sort((a, b) => a.amount - b.amount || a.user.id.localeCompare(b.user.id));
+    creditors.sort((a, b) => b.amount - a.amount || a.user.id.localeCompare(b.user.id));
 
     const settlements = [];
     let i = 0;
@@ -85,19 +100,20 @@ export const calculateSettlements = (balances, participants) => {
         const debtor = debtors[i];
         const creditor = creditors[j];
 
-        const amount = Math.min(Math.abs(debtor.amount), creditor.amount);
+        const amountCents = Math.min(Math.abs(debtor.amount), creditor.amount);
+        if (amountCents === 0) break;
 
         settlements.push({
             from: debtor.user,
             to: creditor.user,
-            amount: Number(amount.toFixed(2))
+            amount: toDollars(amountCents)
         });
 
-        debtor.amount += amount;
-        creditor.amount -= amount;
+        debtor.amount += amountCents;
+        creditor.amount -= amountCents;
 
-        if (Math.abs(debtor.amount) < 0.01) i++;
-        if (creditor.amount < 0.01) j++;
+        if (debtor.amount === 0) i++;
+        if (creditor.amount === 0) j++;
     }
 
     return settlements;
@@ -110,8 +126,8 @@ export const getActiveParticipants = (expenses, participants) => {
     expenses.forEach(expense => {
         if (expense.paidBy) activeIds.add(expense.paidBy);
         if (expense.shares) {
-            Object.keys(expense.shares).forEach(userId => {
-                if (expense.shares[userId] > 0) activeIds.add(userId);
+            Object.entries(expense.shares).forEach(([userId, shareAmount]) => {
+                if (Number(shareAmount) > 0) activeIds.add(userId);
             });
         }
     });
