@@ -68,33 +68,33 @@ const SignUp = () => {
 
     if (success) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                        <CheckCircle className="text-green-600" size={32} />
+            <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--page)', fontFamily: 'Inter, sans-serif' }}>
+                <div className="rounded-2xl shadow-xl w-full max-w-md p-8 text-center" style={{ backgroundColor: 'var(--card)', border: '1px solid var(--line)' }}>
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ backgroundColor: 'var(--moss-soft)' }}>
+                        <CheckCircle size={32} style={{ color: 'var(--moss)' }} />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Account Created!</h2>
-                    <p className="text-gray-600 mb-6">
+                    <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--ink)', fontFamily: 'Space Grotesk, sans-serif' }}>Account Created!</h2>
+                    <p className="mb-6" style={{ color: 'var(--muted)' }}>
                         Welcome to E-Split! Redirecting you to the app...
                     </p>
-                    <Loader className="animate-spin text-indigo-600 mx-auto" size={24} />
+                    <Loader className="animate-spin mx-auto" size={24} style={{ color: 'var(--teal)' }} />
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--page)', fontFamily: 'Inter, sans-serif' }}>
+            <div className="rounded-2xl shadow-xl w-full max-w-md p-8" style={{ backgroundColor: 'var(--card)', border: '1px solid var(--line)' }}>
                 {/* Logo and Title */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl mb-4">
-                        <UserPlus className="text-white" size={32} />
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4" style={{ backgroundColor: 'var(--teal-soft)' }}>
+                        <UserPlus size={32} style={{ color: 'var(--teal)' }} />
                     </div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                    <h1 className="text-3xl font-bold" style={{ color: 'var(--ink)', fontFamily: 'Space Grotesk, sans-serif' }}>
                         Create Account
                     </h1>
-                    <p className="text-gray-600 mt-2">Join E-Split to manage expenses</p>
+                    <p className="mt-2" style={{ color: 'var(--muted)' }}>Join E-Split to manage expenses</p>
                 </div>
 
                 {/* Error Message */}
@@ -109,16 +109,16 @@ const SignUp = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Name */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Name
                         </label>
                         <div className="relative">
-                            <User className="absolute left-3 top-3 text-gray-400" size={20} />
+                            <User className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
                                 placeholder="John Doe"
                                 required
                             />
@@ -127,16 +127,16 @@ const SignUp = () => {
 
                     {/* Email */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Email
                         </label>
                         <div className="relative">
-                            <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
+                            <Mail className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
                                 placeholder="your@email.com"
                                 required
                             />
@@ -145,36 +145,36 @@ const SignUp = () => {
 
                     {/* Password */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Password
                         </label>
                         <div className="relative">
-                            <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
+                            <Lock className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
                                 placeholder="••••••••"
                                 minLength={6}
                                 required
                             />
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">At least 6 characters</p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>At least 6 characters</p>
                     </div>
 
                     {/* Confirm Password */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Confirm Password
                         </label>
                         <div className="relative">
-                            <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
+                            <Lock className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
                                 placeholder="••••••••"
                                 required
                             />
@@ -185,7 +185,8 @@ const SignUp = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="w-full py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50"
+                        style={{ backgroundColor: 'var(--teal)', color: 'white', fontFamily: 'Space Grotesk, sans-serif' }}
                     >
                         {loading ? (
                             <>
@@ -203,12 +204,13 @@ const SignUp = () => {
 
                 {/* Login Link */}
                 <div className="mt-6 text-center">
-                    <p className="text-gray-600">
+                    <p style={{ color: 'var(--muted)' }}>
                         Already have an account?{' '}
                         <Link
                             to="/login"
                             state={{ joinGroupId }} // Preserve join intent
-                            className="text-indigo-600 hover:text-indigo-700 font-semibold"
+                            className="font-bold hover:opacity-80 transition-opacity"
+                            style={{ color: 'var(--teal)' }}
                         >
                             Sign In
                         </Link>

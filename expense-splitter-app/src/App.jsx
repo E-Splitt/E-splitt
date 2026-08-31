@@ -77,6 +77,8 @@ import {
 
 import { lockGroup } from './utils/crypto';
 
+import { getParticipantHue } from './utils/colors';
+
 function App() {
   const { user, loading, signOut } = useAuth();
   const location = useLocation();
@@ -720,7 +722,6 @@ function App() {
               </div>
             </div>
           </div>
-
           <nav className="side-nav">
             {nav.map((n) => (
               <button
@@ -733,15 +734,6 @@ function App() {
               </button>
             ))}
           </nav>
-
-          <button className="theme-btn" onClick={() => setDarkMode((d) => !d)}>
-            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-            {darkMode ? "Light mode" : "Dark mode"}
-          </button>
-          
-          <button onClick={signOut} className="flex items-center gap-2 mt-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors w-full">
-            <LogOut size={15} /> Logout
-          </button>
         </aside>
 
         {/* ---------- main column ---------- */}
@@ -751,7 +743,7 @@ function App() {
               {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
             
-            <div className="flex gap-4 items-center">
+            <div className="topbar-center">
               <div>
                 <span className="crumb">Group</span>
                 <GroupSelector
@@ -779,9 +771,19 @@ function App() {
               )}
             </div>
 
-            <button className="add-btn" onClick={() => setIsExpenseModalOpen(true)}>
-              <Plus size={17} /> <span className="only-desktop">Add expense</span>
-            </button>
+            <div className="flex items-center gap-3">
+                <div className="only-desktop flex items-center gap-1 mr-2">
+                    <button className="icon-btn ghost" onClick={() => setDarkMode((d) => !d)} title="Toggle Theme">
+                        {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
+                    <button onClick={signOut} className="icon-btn ghost text-red-500 hover:bg-red-50" title="Logout">
+                        <LogOut size={18} />
+                    </button>
+                </div>
+                <button className="add-btn" onClick={() => setIsExpenseModalOpen(true)}>
+                  <Plus size={17} /> <span className="only-desktop">Add expense</span>
+                </button>
+            </div>
           </header>
 
           {isMobileMenuOpen && (
@@ -807,8 +809,9 @@ function App() {
             </div>
           )}
 
-          <main className="content">
-            <AnimatePresence mode="wait">
+          <div className="flex flex-1 overflow-hidden">
+            <main className="content overflow-y-auto">
+              <AnimatePresence mode="wait">
               {activeTab === 'dashboard' && (
                 <motion.div
                   key="dashboard"
@@ -877,7 +880,42 @@ function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </main>
+            </main>
+
+            {/* Right Sidebar for Contributions */}
+            <aside className="hidden xl:block w-72 2xl:w-80 border-l flex-shrink-0 overflow-y-auto" style={{ borderColor: 'var(--line)', backgroundColor: 'var(--page)' }}>
+                <div className="p-6">
+                  <h3 className="text-xs font-bold tracking-widest uppercase mb-6" style={{ color: 'var(--muted)' }}>Member Contributions</h3>
+                  <div className="space-y-5">
+                    {participants.map((p, idx) => {
+                       const balance = balances[p.id] || 0;
+                       return (
+                       <div key={p.id} className="flex flex-col gap-1.5">
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                               <div className="avatar-chip" data-hue={getParticipantHue(idx)} style={{ width: 28, height: 28, fontSize: 12 }}>
+                                  {p.name.charAt(0).toUpperCase()}
+                               </div>
+                               <span className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{p.name}</span>
+                            </div>
+                            <span className="mono text-sm font-medium" title="Total Paid">${(totalPaid[p.id] || 0).toFixed(2)}</span>
+                         </div>
+                         <div className="flex justify-end">
+                           {balance > 0.01 ? (
+                             <span className="text-xs font-medium" style={{ color: 'var(--moss)' }}>gets back ${Math.abs(balance).toFixed(2)}</span>
+                           ) : balance < -0.01 ? (
+                             <span className="text-xs font-medium" style={{ color: 'var(--coral)' }}>owes ${Math.abs(balance).toFixed(2)}</span>
+                           ) : (
+                             <span className="text-xs font-medium" style={{ color: 'var(--muted)' }}>settled</span>
+                           )}
+                         </div>
+                       </div>
+                       );
+                    })}
+                  </div>
+                </div>
+              </aside>
+            </div>
         </div>
 
         {/* ---------- mobile bottom nav ---------- */}

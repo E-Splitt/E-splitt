@@ -124,7 +124,8 @@ body {
 
 /* Main Area & Topbar */
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--page); }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--page); position: relative; }
+.topbar-center { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 16px; align-items: center; }
 .crumb { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; display: block; }
 .group-pill { display: flex; align-items: center; gap: 6px; border: none; background: none; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); cursor: pointer; padding: 0; }
 .add-btn { display: flex; align-items: center; gap: 6px; background: var(--teal); color: #fff; border: none; padding: 10px 16px; border-radius: 10px; font-weight: 600; font-size: 13.5px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; }

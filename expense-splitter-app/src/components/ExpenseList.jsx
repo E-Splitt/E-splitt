@@ -16,6 +16,7 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState('newest');
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     const filteredAndSorted = useMemo(() => {
         let result = expenses.filter(expense => {
@@ -132,7 +133,7 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
             </div>
 
             {/* List */}
-            <div className="p-4 sm:p-6 max-h-[600px] overflow-y-auto">
+            <div className={`p-4 sm:p-6 ${isExpanded ? 'max-h-none' : 'max-h-[600px] overflow-y-auto'}`}>
                 {filteredAndSorted.length === 0 ? (
                     <div className="text-center py-12 px-4" style={{ color: 'var(--text-muted)' }}>
                         {hasActiveFilters ? (
@@ -227,6 +228,18 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
                     </div>
                 )}
             </div>
+
+            {filteredAndSorted.length > 5 && (
+                <div className="border-t p-2 flex justify-center" style={{ borderColor: 'var(--line)' }}>
+                    <button 
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="text-xs font-semibold uppercase tracking-wider py-2 px-4 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        style={{ color: 'var(--teal)' }}
+                    >
+                        {isExpanded ? 'Collapse List' : 'Expand All Transactions'}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
