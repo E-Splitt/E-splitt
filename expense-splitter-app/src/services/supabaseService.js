@@ -1,7 +1,44 @@
 import { supabase } from '../supabase';
+import { buildOwnerParticipant } from '../utils/participants';
 
 // Table name
 const GROUPS_TABLE = 'groups';
+const MAX_UPDATE_RETRIES = 5;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Merge arrays by id; client entries override server for the same id (helps concurrent adds). */
+export const mergeById = (serverArr = [], clientArr = [], idKey = 'id') => {
+    const map = new Map();
+    for (const item of serverArr) {
+        if (item?.[idKey] != null) map.set(item[idKey], item);
+    }
+    for (const item of clientArr) {
+        if (item?.[idKey] != null) map.set(item[idKey], item);
+    }
+    return Array.from(map.values());
+};
+
+const applyPartialToGroupData = (currentData, partialData) => {
+    const merged = { ...currentData, ...partialData };
+
+    if (partialData.expenses !== undefined) {
+        merged.expenses = mergeById(currentData.expenses || [], partialData.expenses);
+    }
+    if (partialData.chatMessages !== undefined) {
+        merged.chatMessages = mergeById(currentData.chatMessages || [], partialData.chatMessages);
+    }
+    if (partialData.activityLog !== undefined) {
+        merged.activityLog = mergeById(currentData.activityLog || [], partialData.activityLog).slice(0, 100);
+    }
+    if (partialData.participants !== undefined) {
+        merged.participants = mergeById(currentData.participants || [], partialData.participants);
+    }
+
+    merged.dataVersion = (currentData.dataVersion || 0) + 1;
+    merged.updatedAt = new Date().toISOString();
+    return merged;
+};
 
 // Generate secure random group ID
 const generateGroupId = () => {
@@ -24,12 +61,20 @@ export const createGroupInSupabase = async (groupData, customId = null) => {
 
         const groupId = customId || generateGroupId();
 
+        const ownerParticipant = buildOwnerParticipant(user);
         const newGroup = {
+            participants: ownerParticipant ? [ownerParticipant] : [],
+            expenses: [],
+            activityLog: [],
+            chatMessages: [],
+            pinEnabled: false,
             ...groupData,
             id: groupId,
             createdAt: new Date().toISOString(),
-            activityLog: [] // Initialize activity log
         };
+        if (!newGroup.participants?.length && ownerParticipant) {
+            newGroup.participants = [ownerParticipant];
+        }
 
         const { error } = await supabase
             .from(GROUPS_TABLE)
@@ -49,31 +94,40 @@ export const createGroupInSupabase = async (groupData, customId = null) => {
     }
 };
 
-// Update an existing group
+// Update an existing group (read–merge–write with retries for concurrent edits)
 export const updateGroupInSupabase = async (groupId, partialData) => {
-    try {
-        // First, get the current data to merge
-        const { data: currentRows, error: fetchError } = await supabase
-            .from(GROUPS_TABLE)
-            .select('data')
-            .eq('group_id', groupId)
-            .single();
+    let lastError = null;
 
-        if (fetchError) throw fetchError;
+    for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
+        try {
+            const { data: currentRows, error: fetchError } = await supabase
+                .from(GROUPS_TABLE)
+                .select('data')
+                .eq('group_id', groupId)
+                .single();
 
-        const currentData = currentRows.data;
-        const updatedData = { ...currentData, ...partialData };
+            if (fetchError) throw fetchError;
 
-        const { error } = await supabase
-            .from(GROUPS_TABLE)
-            .update({ data: updatedData })
-            .eq('group_id', groupId);
+            const currentData = currentRows.data || {};
+            const updatedData = applyPartialToGroupData(currentData, partialData);
 
-        if (error) throw error;
-    } catch (error) {
-        console.error("Error updating group:", error);
-        throw error;
+            const { error } = await supabase
+                .from(GROUPS_TABLE)
+                .update({ data: updatedData })
+                .eq('group_id', groupId);
+
+            if (error) throw error;
+            return;
+        } catch (error) {
+            lastError = error;
+            if (attempt < MAX_UPDATE_RETRIES - 1) {
+                await sleep(40 * (attempt + 1));
+            }
+        }
     }
+
+    console.error('Error updating group:', lastError);
+    throw lastError;
 };
 
 // Delete a group
@@ -140,7 +194,7 @@ export const subscribeToGroups = (userId, callback) => {
     // Subscribe to changes (Filter by user_id)
     const channel = supabase
         .channel('public:groups')
-        .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, async (payload) => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, async () => {
             // Since payload might not have user_id on some events, safest to just refetch
             await fetchUserGroups();
         })
@@ -275,7 +329,6 @@ export const fetchLogs = async () => {
 
 export const sendMessage = async (groupId, message) => {
     try {
-        // 1. Get current group data
         const { data: groupRow, error: fetchError } = await supabase
             .from(GROUPS_TABLE)
             .select('data')
@@ -284,23 +337,12 @@ export const sendMessage = async (groupId, message) => {
 
         if (fetchError) throw fetchError;
 
-        const currentData = groupRow.data;
-        const currentMessages = currentData.chatMessages || [];
-
-        // 2. Append new message
-        const updatedMessages = [...currentMessages, message];
-
-        //3. Update group
-        const { error: updateError } = await supabase
-            .from(GROUPS_TABLE)
-            .update({
-                data: { ...currentData, chatMessages: updatedMessages }
-            })
-            .eq('group_id', groupId);
-
-        if (updateError) throw updateError;
+        const currentMessages = groupRow.data?.chatMessages || [];
+        await updateGroupInSupabase(groupId, {
+            chatMessages: [...currentMessages, message],
+        });
     } catch (error) {
-        console.error("Error sending message:", error);
+        console.error('Error sending message:', error);
         throw error;
     }
 };

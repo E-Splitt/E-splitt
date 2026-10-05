@@ -156,7 +156,7 @@ export const subscribeToGroupMembers = (groupId, callback) => {
                 table: GROUP_MEMBERS_TABLE,
                 filter: `group_id=eq.${groupId}`
             },
-            async (payload) => {
+            async () => {
                 // Fetch fresh members data
                 const members = await getGroupMembers(groupId);
                 callback(members);

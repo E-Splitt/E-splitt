@@ -3,7 +3,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/Dashboard';
-import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
+import { calculateBalances } from './utils/splitLogic';
 import ESplitLogo from './components/ESplitLogo';
 import { supabase } from './supabase';
 
@@ -20,7 +20,6 @@ import PinModal from './components/PinModal';
 import ActivityLog from './components/ActivityLog';
 import Chat from './components/Chat';
 import UserProfileModal from './components/UserProfileModal';
-import DevDashboard from './components/DevDashboard';
 import Analytics from './components/Analytics';
 import QuickAddExpense from './components/QuickAddExpense';
 import PeriodSelector from './components/PeriodSelector';
@@ -47,17 +46,11 @@ import {
   sendMessage
 } from './services/supabaseService';
 
-import {
-  addGroupMember,
-  removeGroupMember,
-  updateMemberRole
-} from './services/memberService';
+import { addGroupMember } from './services/memberService';
 
 import {
   createPeriod,
   closePeriod,
-  getPeriodsForGroup,
-  getActivePeriod,
   subscribeToPeriods,
   ensureActivePeriod,
   deletePeriod
@@ -75,9 +68,10 @@ import {
   notifyPeriodClosed
 } from './utils/notifications';
 
-import { lockGroup } from './utils/crypto';
+import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked, lockGroup } from './utils/crypto';
 
 import { getParticipantHue } from './utils/colors';
+import { findParticipantIdForUser } from './utils/participants';
 
 function App() {
   const { user, loading, signOut } = useAuth();
@@ -89,9 +83,7 @@ function App() {
   const [expenses, setExpenses] = useState([]);
   const [activityLog, setActivityLog] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
-  const [logoClickCount, setLogoClickCount] = useState(0);
-  const [isDevModalOpen, setIsDevModalOpen] = useState(false);
-  const [isMutating, setIsMutating] = useState(false); // Prevent subscription overwrites during mutations
+  const [, setIsMutating] = useState(false); // lock ref sync; value unused in render
 
   // Modals
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -117,7 +109,6 @@ function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('e-split-dark-mode') === 'true');
   const refreshGroupDataRef = useRef(null); // Store refresh function for manual sync
   const isMutatingRef = useRef(false); // Store mutation state for subscription callback
-  let logoClickTimer;
 
   // Dark mode effect
   useEffect(() => {
@@ -246,7 +237,7 @@ function App() {
   // Handlers
   const handleSelectGroup = (groupId) => {
     const group = groups.find(g => g.id === groupId);
-    if (group?.pinEnabled) {
+    if (group?.pinEnabled && !isGroupUnlocked(groupId)) {
       setPinModalGroupId(groupId);
       setPinModalMode('enter');
       setIsPinModalOpen(true);
@@ -313,17 +304,26 @@ function App() {
   const handlePinSubmit = async (pin) => {
     if (pinModalMode === 'enter') {
       const group = groups.find(g => g.id === pinModalGroupId);
-      if (group && group.pin === pin) {
+      const storedSecret = group?.pinHash ?? group?.pin;
+      const valid = storedSecret && (await verifyPin(pin, storedSecret));
+      if (valid) {
+        markGroupUnlocked(pinModalGroupId);
         setCurrentGroupId(pinModalGroupId);
         setIsPinModalOpen(false);
         setPinModalGroupId(null);
+        setIsMobileMenuOpen(false);
       } else {
         alert('Incorrect PIN');
       }
     } else {
-      // Set PIN
       try {
-        await updateGroupInSupabase(pinModalGroupId, { pin, pinEnabled: true });
+        const pinHash = await hashPin(pin);
+        await updateGroupInSupabase(pinModalGroupId, {
+          pinHash,
+          pinEnabled: true,
+          pin: null,
+        });
+        markGroupUnlocked(pinModalGroupId);
         setIsPinModalOpen(false);
         setPinModalGroupId(null);
         alert('PIN set successfully');
@@ -331,22 +331,6 @@ function App() {
         console.error(e);
         alert('Failed to set PIN');
       }
-    }
-  };
-
-  const handleLogoClick = () => {
-    const newCount = logoClickCount + 1;
-    setLogoClickCount(newCount);
-
-    if (logoClickTimer) clearTimeout(logoClickTimer);
-
-    if (newCount >= 5) {
-      setIsDevModalOpen(true);
-      setLogoClickCount(0);
-    } else {
-      logoClickTimer = setTimeout(() => {
-        setLogoClickCount(0);
-      }, 2000);
     }
   };
 
@@ -545,15 +529,6 @@ function App() {
     try { await addGroupMember(currentGroupId, userEmail, role); alert('Invited!'); } catch (e) { console.error(e); throw e; }
   };
 
-  const handleRemoveMember = async (userId) => {
-    if (!confirm('Remove member?')) return;
-    try { await removeGroupMember(currentGroupId, userId); } catch (e) { console.error(e); alert('Failed'); }
-  };
-
-  const handleUpdateMemberRole = async (userId, newRole) => {
-    try { await updateMemberRole(currentGroupId, userId, newRole); } catch (e) { console.error(e); alert('Failed'); }
-  };
-
   // ------------------------------------------------------------------
   //  Start Helper Functions (that were potentially misplaced)
   // ------------------------------------------------------------------
@@ -586,7 +561,7 @@ function App() {
     return settlements;
   };
 
-  const handleClosePeriod = async (periodName) => {
+  const handleClosePeriod = async () => {
     if (!currentPeriodId) return;
 
     // Calculate final balances/settlements based on current active expenses
@@ -644,8 +619,18 @@ function App() {
   };
 
   const handleCreatePeriod = async () => {
-    const currentGroup = groups.find(g => g.id === currentGroupId);
-    if (currentGroup && currentGroup.pinEnabled) lockGroup(currentGroupId);
+    if (!currentGroupId) return;
+    try {
+      const currentGroup = groups.find(g => g.id === currentGroupId);
+      if (currentGroup?.pinEnabled) lockGroup(currentGroupId);
+      const newPeriod = await createPeriod(currentGroupId);
+      setCurrentPeriodId(newPeriod.id);
+    } catch (error) {
+      console.error('Error creating period:', error);
+      alert(
+        'Could not create a period. If this is a new database, run supabase_members_and_periods.sql in Supabase.'
+      );
+    }
   };
 
   // ------------------------------------------------------------------
@@ -665,9 +650,8 @@ function App() {
   });
 
   const { balances, totalPaid } = calculateBalances(periodExpenses, participants);
-  const activeParticipants = getActiveParticipants(periodExpenses, participants);
   const totalExpenses = periodExpenses.filter(e => !e.isSettlement).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-  const avgPerPerson = activeParticipants.length > 0 ? totalExpenses / activeParticipants.length : 0;
+  const currentParticipantId = findParticipantIdForUser(user, participants);
 
   const handleUndo = async (activity) => {
     if (!activity.details?.previousState) { alert('Cannot undo'); return; }
@@ -713,7 +697,7 @@ function App() {
       <div className="shell">
         {/* ---------- desktop side ledger ---------- */}
         <aside className="side">
-          <div className="side-brand cursor-pointer" onClick={handleLogoClick}>
+          <div className="side-brand">
             <div className="side-mark">e/</div>
             <div>
               <div className="side-title">E-Split</div>
@@ -765,7 +749,7 @@ function App() {
                     periods={periods}
                     currentPeriod={currentPeriodId}
                     onSelectPeriod={setCurrentPeriodId}
-                    onCreatePeriod={() => createPeriod(currentGroupId).catch(console.error)}
+                    onCreatePeriod={handleCreatePeriod}
                   />
                 </div>
               )}
@@ -836,7 +820,7 @@ function App() {
                       </div>
                     </div>
 
-                    <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} currentUserId={user?.id} expenses={periodExpenses} onSettle={(fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })} />
+                    <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} currentUserId={currentParticipantId} expenses={periodExpenses} onSettle={(fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })} />
                   </div>
 
                   {/* Quick Add Expense - Visible on Desktop/Tablet */}
@@ -844,7 +828,7 @@ function App() {
                     <QuickAddExpense
                       onAdd={handleAddExpense}
                       participants={participants}
-                      currentUserId={user?.id}
+                      currentUserId={currentParticipantId}
                     />
                   </div>
 
@@ -938,7 +922,6 @@ function App() {
       <ShareGroupModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} groupData={shareGroupData} />
       <PinModal isOpen={isPinModalOpen} onClose={() => { setIsPinModalOpen(false); setPinModalGroupId(null); }} onSubmit={handlePinSubmit} mode={pinModalMode} groupName={groups.find(g => g.id === pinModalGroupId)?.name} />
       <InviteMemberModal isOpen={isInviteMemberModalOpen} onClose={() => setIsInviteMemberModalOpen(false)} onInvite={handleInviteMember} groupName={groups.find(g => g.id === currentGroupId)?.name || 'this group'} groupId={currentGroupId} />
-      <DevDashboard isOpen={isDevModalOpen} onClose={() => setIsDevModalOpen(false)} />
 
       {/* Close Period / Archive Modal */}
       <ClosePeriodModal

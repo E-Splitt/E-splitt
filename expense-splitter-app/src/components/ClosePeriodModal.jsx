@@ -4,7 +4,6 @@ import { X, AlertCircle, TrendingUp, Users, DollarSign } from 'lucide-react';
 const ClosePeriodModal = ({
     isOpen,
     onClose,
-    period,
     balances = {},
     settlements = [],
     totalExpenses = 0,

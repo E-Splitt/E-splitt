@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { lockGroup, isGroupUnlocked, markGroupUnlocked, lockAllGroups } from '../utils/crypto';
@@ -86,7 +86,7 @@ describe('[EPL-003] Group Join Redirection State Resolution', () => {
 
     beforeEach(() => {
         mockStorage = {};
-        global.localStorage = {
+        globalThis.localStorage = {
             getItem: (key) => mockStorage[key] || null,
             setItem: (key, val) => { mockStorage[key] = String(val); },
             removeItem: (key) => { delete mockStorage[key]; },

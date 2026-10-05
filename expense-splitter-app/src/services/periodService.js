@@ -155,7 +155,7 @@ export const subscribeToPeriods = (groupId, callback) => {
                 table: 'settlement_periods',
                 filter: `group_id=eq.${groupId}`
             },
-            (payload) => {
+            () => {
                 // Fetch updated periods and call callback
                 getPeriodsForGroup(groupId).then(callback);
             }

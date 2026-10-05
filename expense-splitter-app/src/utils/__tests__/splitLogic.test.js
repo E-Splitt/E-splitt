@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateBalances, calculateSettlements, toCents, toDollars } from '../splitLogic';
+import { calculateBalances, calculateSettlements } from '../splitLogic';
 
 describe('Eplitt Financial Engine - splitLogic.js', () => {
     
