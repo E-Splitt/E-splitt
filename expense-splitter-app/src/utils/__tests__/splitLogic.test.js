@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateBalances, calculateSettlements } from '../splitLogic';
+import { calculateBalances, calculateSettlements, findParticipantIdForUser } from '../splitLogic';
 
 describe('Eplitt Financial Engine - splitLogic.js', () => {
     
@@ -140,6 +140,28 @@ describe('Eplitt Financial Engine - splitLogic.js', () => {
             expect(settlements1[0].to.id).toBe('C');
             expect(settlements1[1].to.id).toBe('C');
             expect(settlements1[0].amount + settlements1[1].amount).toBe(100);
+        });
+    });
+
+    describe('findParticipantIdForUser', () => {
+        const group = [
+            { id: 'user_1700000000000', name: 'Me', email: 'Me@Example.com' },
+            { id: 'user_1700000000001', name: 'Friend', email: null },
+        ];
+
+        it('matches the auth user to a participant by email (case-insensitive)', () => {
+            const user = { id: 'f47ac10b-uuid', email: 'me@example.com' };
+            expect(findParticipantIdForUser(group, user)).toBe('user_1700000000000');
+        });
+
+        it('prefers a participant whose id equals the auth id', () => {
+            const user = { id: 'user_1700000000001', email: 'me@example.com' };
+            expect(findParticipantIdForUser(group, user)).toBe('user_1700000000001');
+        });
+
+        it('returns null when the user is not a participant', () => {
+            expect(findParticipantIdForUser(group, { id: 'x', email: 'other@example.com' })).toBeNull();
+            expect(findParticipantIdForUser(group, null)).toBeNull();
         });
     });
 });

@@ -21,11 +21,6 @@ const PeriodArchive = ({ periods = [], participants = [], expenses = [], onViewD
         return p?.name || userId;
     };
 
-    const getParticipantColor = (userId) => {
-        const p = participants.find(p => p.id === userId);
-        return p?.color || '#6366f1';
-    };
-
     const escapeCSV = (value) => {
         const str = String(value ?? '');
         if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -70,13 +65,16 @@ const PeriodArchive = ({ periods = [], participants = [], expenses = [], onViewD
 
         const sorted = Object.values(spenderMap).sort((a, b) => b.total - a.total);
         const maxSpent = sorted.length > 0 ? sorted[0].total : 1;
-        return sorted.slice(0, 5).map((s, i) => ({
-            ...s,
-            name: getParticipantName(s.userId),
-            color: getParticipantColor(s.userId),
-            pct: (s.total / maxSpent) * 100,
-            rank: i + 1
-        }));
+        return sorted.slice(0, 5).map((s, i) => {
+            const person = participants.find(p => p.id === s.userId);
+            return {
+                ...s,
+                name: person?.name || s.userId,
+                color: person?.color || '#6366f1',
+                pct: (s.total / maxSpent) * 100,
+                rank: i + 1
+            };
+        });
     }, [closedPeriods, expenses, participants]);
 
     // ===== Export =====

@@ -1,44 +1,9 @@
 import { supabase } from '../supabase';
+import { appendChatMessage } from '../utils/groupMutations';
 import { buildOwnerParticipant } from '../utils/participants';
 
 // Table name
 const GROUPS_TABLE = 'groups';
-const MAX_UPDATE_RETRIES = 5;
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Merge arrays by id; client entries override server for the same id (helps concurrent adds). */
-export const mergeById = (serverArr = [], clientArr = [], idKey = 'id') => {
-    const map = new Map();
-    for (const item of serverArr) {
-        if (item?.[idKey] != null) map.set(item[idKey], item);
-    }
-    for (const item of clientArr) {
-        if (item?.[idKey] != null) map.set(item[idKey], item);
-    }
-    return Array.from(map.values());
-};
-
-const applyPartialToGroupData = (currentData, partialData) => {
-    const merged = { ...currentData, ...partialData };
-
-    if (partialData.expenses !== undefined) {
-        merged.expenses = mergeById(currentData.expenses || [], partialData.expenses);
-    }
-    if (partialData.chatMessages !== undefined) {
-        merged.chatMessages = mergeById(currentData.chatMessages || [], partialData.chatMessages);
-    }
-    if (partialData.activityLog !== undefined) {
-        merged.activityLog = mergeById(currentData.activityLog || [], partialData.activityLog).slice(0, 100);
-    }
-    if (partialData.participants !== undefined) {
-        merged.participants = mergeById(currentData.participants || [], partialData.participants);
-    }
-
-    merged.dataVersion = (currentData.dataVersion || 0) + 1;
-    merged.updatedAt = new Date().toISOString();
-    return merged;
-};
 
 // Generate secure random group ID
 const generateGroupId = () => {
@@ -94,40 +59,70 @@ export const createGroupInSupabase = async (groupData, customId = null) => {
     }
 };
 
-// Update an existing group (read–merge–write with retries for concurrent edits)
-export const updateGroupInSupabase = async (groupId, partialData) => {
-    let lastError = null;
+const MAX_SAVE_ATTEMPTS = 5;
 
-    for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
-        try {
-            const { data: currentRows, error: fetchError } = await supabase
-                .from(GROUPS_TABLE)
-                .select('data')
-                .eq('group_id', groupId)
-                .single();
+// Postgres "undefined column" / PostgREST "column not in schema cache"
+const isMissingVersionColumn = (error) =>
+    error && (error.code === '42703' || error.code === 'PGRST204') && /version/.test(error.message || '');
 
-            if (fetchError) throw fetchError;
+/**
+ * Apply `mutate(latestData) => nextData` to a group with optimistic concurrency.
+ * The write only succeeds if nobody else saved since we read; otherwise it re-reads and retries,
+ * so concurrent edits from other members are never overwritten.
+ * Returns the saved data.
+ */
+export const mutateGroupData = async (groupId, mutate) => {
+    for (let attempt = 1; attempt <= MAX_SAVE_ATTEMPTS; attempt++) {
+        const { data: row, error: fetchError } = await supabase
+            .from(GROUPS_TABLE)
+            .select('data, version')
+            .eq('group_id', groupId)
+            .single();
 
-            const currentData = currentRows.data || {};
-            const updatedData = applyPartialToGroupData(currentData, partialData);
+        if (isMissingVersionColumn(fetchError)) return mutateGroupDataUnversioned(groupId, mutate);
+        if (fetchError) throw fetchError;
 
-            const { error } = await supabase
-                .from(GROUPS_TABLE)
-                .update({ data: updatedData })
-                .eq('group_id', groupId);
+        const version = row.version ?? 0;
+        const nextData = mutate(row.data || {});
 
-            if (error) throw error;
-            return;
-        } catch (error) {
-            lastError = error;
-            if (attempt < MAX_UPDATE_RETRIES - 1) {
-                await sleep(40 * (attempt + 1));
-            }
-        }
+        const { data: updatedRows, error: updateError } = await supabase
+            .from(GROUPS_TABLE)
+            .update({ data: nextData, version: version + 1 })
+            .eq('group_id', groupId)
+            .eq('version', version)
+            .select('group_id');
+
+        if (updateError) throw updateError;
+        if (updatedRows?.length) return nextData;
     }
+    throw new Error('This group is being edited by someone else right now. Please try again.');
+};
 
-    console.error('Error updating group:', lastError);
-    throw lastError;
+const mutateGroupDataUnversioned = async (groupId, mutate) => {
+    const { data: row, error: fetchError } = await supabase
+        .from(GROUPS_TABLE)
+        .select('data')
+        .eq('group_id', groupId)
+        .single();
+    if (fetchError) throw fetchError;
+
+    const nextData = mutate(row.data || {});
+    const { error } = await supabase
+        .from(GROUPS_TABLE)
+        .update({ data: nextData })
+        .eq('group_id', groupId);
+    if (error) throw error;
+    return nextData;
+};
+
+// Update an existing group
+export const updateGroupInSupabase = async (groupId, partialData) => {
+    try {
+        return await mutateGroupData(groupId, (current) => ({ ...current, ...partialData }));
+    } catch (error) {
+        console.error("Error updating group:", error);
+        throw error;
+    }
 };
 
 // Delete a group
@@ -285,64 +280,11 @@ export const importGroupToSupabase = async (groupData) => {
     }
 };
 
-// --- Analytics/Logging ---
-
-export const logDeviceAccess = async (groupId = null) => {
-    try {
-        const { error } = await supabase
-            .from('app_logs')
-            .insert([
-                {
-                    user_agent: navigator.userAgent,
-                    screen_width: window.screen.width,
-                    screen_height: window.screen.height,
-                    language: navigator.language,
-                    platform: navigator.platform,
-                    group_id: groupId
-                }
-            ]);
-
-        if (error) {
-            // Silently fail for logs, don't disrupt user
-            console.warn("Error logging device:", error);
-        }
-    } catch (error) {
-        console.warn("Error logging device:", error);
-    }
-};
-
-export const fetchLogs = async () => {
-    try {
-        const { data, error } = await supabase
-            .from('app_logs')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(50);
-
-        if (error) throw error;
-        return data;
-    } catch (error) {
-        console.error("Error fetching logs:", error);
-        return [];
-    }
-};
-
 export const sendMessage = async (groupId, message) => {
     try {
-        const { data: groupRow, error: fetchError } = await supabase
-            .from(GROUPS_TABLE)
-            .select('data')
-            .eq('group_id', groupId)
-            .single();
-
-        if (fetchError) throw fetchError;
-
-        const currentMessages = groupRow.data?.chatMessages || [];
-        await updateGroupInSupabase(groupId, {
-            chatMessages: [...currentMessages, message],
-        });
+        await mutateGroupData(groupId, appendChatMessage(message));
     } catch (error) {
-        console.error('Error sending message:', error);
+        console.error("Error sending message:", error);
         throw error;
     }
 };

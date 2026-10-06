@@ -61,7 +61,6 @@ const ForgotPassword = ({ onBack }) => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-                {/* Back Button */}
                 <button
                     onClick={goToLogin}
                     className="text-gray-600 hover:text-gray-800 flex items-center gap-2 mb-6"
@@ -70,7 +69,6 @@ const ForgotPassword = ({ onBack }) => {
                     Back to Login
                 </button>
 
-                {/* Title */}
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Reset Password
@@ -80,7 +78,6 @@ const ForgotPassword = ({ onBack }) => {
                     </p>
                 </div>
 
-                {/* Error Message */}
                 {error && (
                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
                         <AlertCircle size={20} />
@@ -88,9 +85,7 @@ const ForgotPassword = ({ onBack }) => {
                     </div>
                 )}
 
-                {/* Reset Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Email */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Email Address
@@ -108,7 +103,6 @@ const ForgotPassword = ({ onBack }) => {
                         </div>
                     </div>
 
-                    {/* Submit Button */}
                     <button
                         type="submit"
                         disabled={loading}

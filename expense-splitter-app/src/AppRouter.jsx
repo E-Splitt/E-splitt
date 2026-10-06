@@ -8,6 +8,7 @@ import Login from './components/auth/Login';
 import SignUp from './components/auth/SignUp';
 import ForgotPassword from './components/auth/ForgotPassword';
 import ResetPassword from './components/auth/ResetPassword';
+import { PrivacyPolicy, TermsOfService } from './components/LegalPages';
 import { Loader } from 'lucide-react';
 
 const ProtectedRoute = ({ children }) => {
@@ -40,6 +41,9 @@ const AppRouter = () => {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/join/:groupId" element={<JoinPage />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
 
                 {/* Protected App Route */}
                 <Route

@@ -1,24 +1,10 @@
+import { findParticipantIdForUser as findInGroup } from './splitLogic';
+
 /**
- * Resolve the group participant id for the signed-in user.
- * Prefers auth UUID, then email match, then first participant.
+ * Map auth user → participant id (argument order matches Quick Add / UI usage).
  */
 export function findParticipantIdForUser(user, participants = []) {
-    if (!user || participants.length === 0) return participants[0]?.id || '';
-
-    const byAuthId = participants.find(
-        (p) => p.id === user.id || p.authUserId === user.id
-    );
-    if (byAuthId) return byAuthId.id;
-
-    if (user.email) {
-        const emailLower = user.email.toLowerCase();
-        const byEmail = participants.find(
-            (p) => p.email && p.email.toLowerCase() === emailLower
-        );
-        if (byEmail) return byEmail.id;
-    }
-
-    return participants[0]?.id || '';
+    return findInGroup(participants, user) || participants[0]?.id || '';
 }
 
 export function buildOwnerParticipant(user) {

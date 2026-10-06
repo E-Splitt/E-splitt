@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Loader, AlertCircle, Check } from 'lucide-react';
+import { createExpenseId } from '../utils/ids';
 
 const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
     const [description, setDescription] = useState('');
@@ -9,13 +10,15 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
     const [error, setError] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
 
+    const defaultPayer = participants.some(p => p.id === currentUserId)
+        ? currentUserId
+        : (participants[0]?.id || '');
+
     useEffect(() => {
-        if (!paidBy && currentUserId) {
-            setPaidBy(currentUserId);
-        } else if (!paidBy && participants.length > 0) {
-            setPaidBy(participants[0].id);
+        if (!participants.some(p => p.id === paidBy)) {
+            setPaidBy(defaultPayer);
         }
-    }, [currentUserId, participants, paidBy]);
+    }, [participants, paidBy, defaultPayer]);
 
     // Auto-dismiss error
     useEffect(() => {
@@ -38,6 +41,10 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
             setError('Enter a valid amount');
             return;
         }
+        if (!participants.some(p => p.id === paidBy)) {
+            setError('Add a participant first');
+            return;
+        }
 
         const shares = {};
         if (participants.length > 0) {
@@ -58,7 +65,7 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
         }
 
         const expenseData = {
-            id: Date.now(),
+            id: createExpenseId(),
             date: new Date().toLocaleDateString(),
             expenseDate: new Date().toISOString().split('T')[0],
             description,
@@ -75,7 +82,7 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
 
             setDescription('');
             setAmount('');
-            setPaidBy(currentUserId || (participants[0]?.id || ''));
+            setPaidBy(defaultPayer);
 
             // Success flash
             setShowSuccess(true);

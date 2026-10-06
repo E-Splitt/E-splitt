@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, DollarSign, ArrowRightLeft, Info } from 'lucide-react';
+import { createExpenseId } from '../utils/ids';
 
 const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => {
     const [from, setFrom] = useState('');
@@ -7,24 +8,33 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
     const [amount, setAmount] = useState('');
     const [note, setNote] = useState('');
     const [error, setError] = useState('');
+    const [prevPrefill, setPrevPrefill] = useState(null);
 
-    useEffect(() => {
+    // Prefill comes as { fromId, toId, amount } from the dashboard or { from, to, amount } from settlement lists
+    if (prefill !== prevPrefill) {
+        setPrevPrefill(prefill);
         if (prefill) {
-            setFrom(prefill.from?.id || '');
-            setTo(prefill.to?.id || '');
+            setFrom(prefill.fromId ?? prefill.from?.id ?? '');
+            setTo(prefill.toId ?? prefill.to?.id ?? '');
             setAmount(prefill.amount?.toString() || '');
+            setError('');
         }
-    }, [prefill]);
-
-    useEffect(() => {
-        setError('');
-    }, [from, to, amount]);
+    }
 
     const suggestedAmount = prefill?.amount;
+
+    const withErrorReset = (setter) => (value) => {
+        setter(value);
+        setError('');
+    };
+    const changeFrom = withErrorReset(setFrom);
+    const changeTo = withErrorReset(setTo);
+    const changeAmount = withErrorReset(setAmount);
 
     const handleSwap = () => {
         setFrom(to);
         setTo(from);
+        setError('');
     };
 
     const handleSubmit = (e) => {
@@ -48,7 +58,7 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
         const toPerson = participants.find(p => p.id === to);
 
         const settlement = {
-            id: Date.now(),
+            id: createExpenseId(),
             date: new Date().toLocaleDateString(),
             description: note || `Settlement: ${fromPerson?.name} paid ${toPerson?.name}`,
             amount: amountFloat,
@@ -92,7 +102,7 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
                         <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>From (Payer)</label>
                         <select
                             value={from}
-                            onChange={(e) => setFrom(e.target.value)}
+                            onChange={(e) => changeFrom(e.target.value)}
                             className="themed-select w-full p-3 rounded-lg"
                         >
                             <option value="">Select person</option>
@@ -120,7 +130,7 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
                         <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>To (Receiver)</label>
                         <select
                             value={to}
-                            onChange={(e) => setTo(e.target.value)}
+                            onChange={(e) => changeTo(e.target.value)}
                             className="themed-select w-full p-3 rounded-lg"
                         >
                             <option value="">Select person</option>
@@ -146,7 +156,7 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
                             <input
                                 type="number"
                                 value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
+                                onChange={(e) => changeAmount(e.target.value)}
                                 className="themed-input w-full p-3 pl-8 rounded-lg"
                                 placeholder="0.00"
                                 step="0.01"

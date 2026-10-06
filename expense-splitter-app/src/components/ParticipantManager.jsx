@@ -56,8 +56,9 @@ const ParticipantManager = ({
                 if (results.length > 0) {
                     setEmailCheckResult('registered');
                     setFoundUser(results[0]);
-                    if (!newName && results[0].name && results[0].name !== 'Unknown') {
-                        setNewName(results[0].name);
+                    const suggestedName = results[0].name;
+                    if (suggestedName && suggestedName !== 'Unknown') {
+                        setNewName(prev => prev || suggestedName);
                     }
                 } else {
                     setEmailCheckResult('not_found');
@@ -111,13 +112,6 @@ const ParticipantManager = ({
         setIsAdding(false);
     };
 
-    const handleInviteInstead = () => {
-        setIsAdding(false);
-        if (onInviteMember) {
-            onInviteMember();
-        }
-    };
-
     const getRoleIcon = (role) => {
         switch (role) {
             case 'owner':
@@ -143,13 +137,28 @@ const ParticipantManager = ({
     return (
         <div className="themed-card rounded-xl p-6">
             {/* Tabs */}
-            <div className="flex gap-2 mb-4" style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                <div className="px-4 py-2 font-medium text-sm" style={{ borderBottom: '2px solid var(--accent-indigo)', color: 'var(--accent-indigo)' }}>
-                    <div className="flex items-center gap-2">
-                        <Users size={16} />
-                        Participants ({participants.length})
-                    </div>
-                </div>
+            <div className="flex gap-2 mb-4" role="tablist" style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                {[
+                    { key: 'participants', icon: Users, label: `Participants (${participants.length})` },
+                    { key: 'members', icon: Shield, label: `Members (${members.length})` }
+                ].map(({ key, icon: Icon, label }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === key}
+                        onClick={() => setActiveTab(key)}
+                        className="px-4 py-2 font-medium text-sm"
+                        style={activeTab === key
+                            ? { borderBottom: '2px solid var(--accent-indigo)', color: 'var(--accent-indigo)' }
+                            : { borderBottom: '2px solid transparent', color: 'var(--text-muted)' }}
+                    >
+                        <span className="flex items-center gap-2">
+                            <Icon size={16} />
+                            {label}
+                        </span>
+                    </button>
+                ))}
             </div>
 
             {/* Participants Tab */}
