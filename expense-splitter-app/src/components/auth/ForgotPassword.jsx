@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Mail, ArrowLeft, Loader, AlertCircle, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Mail, ArrowLeft, Loader, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
-const ForgotPassword = () => {
+const ForgotPassword = ({ onBack }) => {
     const navigate = useNavigate();
-    const goToLogin = () => navigate('/login');
+    const goToLogin = onBack || (() => navigate('/login'));
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -46,7 +46,6 @@ const ForgotPassword = () => {
                             We've sent password reset instructions to <strong>{email}</strong>
                         </p>
                         <button
-                            type="button"
                             onClick={goToLogin}
                             className="text-indigo-600 hover:text-indigo-700 font-semibold flex items-center justify-center gap-2 mx-auto"
                         >
@@ -62,9 +61,7 @@ const ForgotPassword = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
-                {/* Back Button */}
                 <button
-                    type="button"
                     onClick={goToLogin}
                     className="text-gray-600 hover:text-gray-800 flex items-center gap-2 mb-6"
                 >
@@ -72,7 +69,6 @@ const ForgotPassword = () => {
                     Back to Login
                 </button>
 
-                {/* Title */}
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Reset Password
@@ -82,7 +78,6 @@ const ForgotPassword = () => {
                     </p>
                 </div>
 
-                {/* Error Message */}
                 {error && (
                     <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
                         <AlertCircle size={20} />
@@ -90,9 +85,7 @@ const ForgotPassword = () => {
                     </div>
                 )}
 
-                {/* Reset Form */}
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Email */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Email Address
@@ -110,7 +103,6 @@ const ForgotPassword = () => {
                         </div>
                     </div>
 
-                    {/* Submit Button */}
                     <button
                         type="submit"
                         disabled={loading}

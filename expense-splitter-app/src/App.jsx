@@ -88,6 +88,7 @@ import {
 } from './utils/groupMutations';
 
 import { getParticipantHue } from './utils/colors';
+import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked, lockGroup } from './utils/crypto';
 
 function App() {
   const { user, loading, signOut } = useAuth();
@@ -259,7 +260,7 @@ function App() {
   // Handlers
   const handleSelectGroup = (groupId) => {
     const group = groups.find(g => g.id === groupId);
-    if (group?.pinEnabled) {
+    if (group?.pinEnabled && !isGroupUnlocked(groupId)) {
       setPinModalGroupId(groupId);
       setPinModalMode('enter');
       setIsPinModalOpen(true);
@@ -326,17 +327,26 @@ function App() {
   const handlePinSubmit = async (pin) => {
     if (pinModalMode === 'enter') {
       const group = groups.find(g => g.id === pinModalGroupId);
-      if (group && group.pin === pin) {
+      const storedSecret = group?.pinHash ?? group?.pin;
+      const valid = storedSecret && (await verifyPin(pin, storedSecret));
+      if (valid) {
+        markGroupUnlocked(pinModalGroupId);
         setCurrentGroupId(pinModalGroupId);
         setIsPinModalOpen(false);
         setPinModalGroupId(null);
+        setIsMobileMenuOpen(false);
       } else {
         alert('Incorrect PIN');
       }
     } else {
-      // Set PIN
       try {
-        await updateGroupInSupabase(pinModalGroupId, { pin, pinEnabled: true });
+        const pinHash = await hashPin(pin);
+        await updateGroupInSupabase(pinModalGroupId, {
+          pinHash,
+          pinEnabled: true,
+          pin: null,
+        });
+        markGroupUnlocked(pinModalGroupId);
         setIsPinModalOpen(false);
         setPinModalGroupId(null);
         alert('PIN set successfully');
@@ -634,6 +644,21 @@ function App() {
     }
   };
 
+  const handleCreatePeriod = async () => {
+    if (!currentGroupId) return;
+    try {
+      const currentGroup = groups.find(g => g.id === currentGroupId);
+      if (currentGroup?.pinEnabled) lockGroup(currentGroupId);
+      const newPeriod = await createPeriod(currentGroupId);
+      setCurrentPeriodId(newPeriod.id);
+    } catch (error) {
+      console.error('Error creating period:', error);
+      alert(
+        'Could not create a period. Run supabase_members_and_periods.sql in Supabase if tables are missing.'
+      );
+    }
+  };
+
   const handleDeletePeriod = async (periodId) => {
     // Optimistic update: Remove from UI immediately
     setPeriods(prevPeriods => prevPeriods.filter(p => p.id !== periodId));
@@ -761,6 +786,7 @@ function App() {
                     periods={periods}
                     currentPeriod={currentPeriodId}
                     onSelectPeriod={setCurrentPeriodId}
+                    onCreatePeriod={handleCreatePeriod}
                   />
                 </div>
               )}
