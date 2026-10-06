@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { appendChatMessage } from '../utils/groupMutations';
 
 // Table name
 const GROUPS_TABLE = 'groups';
@@ -49,27 +50,66 @@ export const createGroupInSupabase = async (groupData, customId = null) => {
     }
 };
 
-// Update an existing group
-export const updateGroupInSupabase = async (groupId, partialData) => {
-    try {
-        // First, get the current data to merge
-        const { data: currentRows, error: fetchError } = await supabase
+const MAX_SAVE_ATTEMPTS = 5;
+
+// Postgres "undefined column" / PostgREST "column not in schema cache"
+const isMissingVersionColumn = (error) =>
+    error && (error.code === '42703' || error.code === 'PGRST204') && /version/.test(error.message || '');
+
+/**
+ * Apply `mutate(latestData) => nextData` to a group with optimistic concurrency.
+ * The write only succeeds if nobody else saved since we read; otherwise it re-reads and retries,
+ * so concurrent edits from other members are never overwritten.
+ * Returns the saved data.
+ */
+export const mutateGroupData = async (groupId, mutate) => {
+    for (let attempt = 1; attempt <= MAX_SAVE_ATTEMPTS; attempt++) {
+        const { data: row, error: fetchError } = await supabase
             .from(GROUPS_TABLE)
-            .select('data')
+            .select('data, version')
             .eq('group_id', groupId)
             .single();
 
+        if (isMissingVersionColumn(fetchError)) return mutateGroupDataUnversioned(groupId, mutate);
         if (fetchError) throw fetchError;
 
-        const currentData = currentRows.data;
-        const updatedData = { ...currentData, ...partialData };
+        const version = row.version ?? 0;
+        const nextData = mutate(row.data || {});
 
-        const { error } = await supabase
+        const { data: updatedRows, error: updateError } = await supabase
             .from(GROUPS_TABLE)
-            .update({ data: updatedData })
-            .eq('group_id', groupId);
+            .update({ data: nextData, version: version + 1 })
+            .eq('group_id', groupId)
+            .eq('version', version)
+            .select('group_id');
 
-        if (error) throw error;
+        if (updateError) throw updateError;
+        if (updatedRows?.length) return nextData;
+    }
+    throw new Error('This group is being edited by someone else right now. Please try again.');
+};
+
+const mutateGroupDataUnversioned = async (groupId, mutate) => {
+    const { data: row, error: fetchError } = await supabase
+        .from(GROUPS_TABLE)
+        .select('data')
+        .eq('group_id', groupId)
+        .single();
+    if (fetchError) throw fetchError;
+
+    const nextData = mutate(row.data || {});
+    const { error } = await supabase
+        .from(GROUPS_TABLE)
+        .update({ data: nextData })
+        .eq('group_id', groupId);
+    if (error) throw error;
+    return nextData;
+};
+
+// Update an existing group
+export const updateGroupInSupabase = async (groupId, partialData) => {
+    try {
+        return await mutateGroupData(groupId, (current) => ({ ...current, ...partialData }));
     } catch (error) {
         console.error("Error updating group:", error);
         throw error;
@@ -140,7 +180,7 @@ export const subscribeToGroups = (userId, callback) => {
     // Subscribe to changes (Filter by user_id)
     const channel = supabase
         .channel('public:groups')
-        .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, async (payload) => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: GROUPS_TABLE }, async () => {
             // Since payload might not have user_id on some events, safest to just refetch
             await fetchUserGroups();
         })
@@ -231,74 +271,9 @@ export const importGroupToSupabase = async (groupData) => {
     }
 };
 
-// --- Analytics/Logging ---
-
-export const logDeviceAccess = async (groupId = null) => {
-    try {
-        const { error } = await supabase
-            .from('app_logs')
-            .insert([
-                {
-                    user_agent: navigator.userAgent,
-                    screen_width: window.screen.width,
-                    screen_height: window.screen.height,
-                    language: navigator.language,
-                    platform: navigator.platform,
-                    group_id: groupId
-                }
-            ]);
-
-        if (error) {
-            // Silently fail for logs, don't disrupt user
-            console.warn("Error logging device:", error);
-        }
-    } catch (error) {
-        console.warn("Error logging device:", error);
-    }
-};
-
-export const fetchLogs = async () => {
-    try {
-        const { data, error } = await supabase
-            .from('app_logs')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(50);
-
-        if (error) throw error;
-        return data;
-    } catch (error) {
-        console.error("Error fetching logs:", error);
-        return [];
-    }
-};
-
 export const sendMessage = async (groupId, message) => {
     try {
-        // 1. Get current group data
-        const { data: groupRow, error: fetchError } = await supabase
-            .from(GROUPS_TABLE)
-            .select('data')
-            .eq('group_id', groupId)
-            .single();
-
-        if (fetchError) throw fetchError;
-
-        const currentData = groupRow.data;
-        const currentMessages = currentData.chatMessages || [];
-
-        // 2. Append new message
-        const updatedMessages = [...currentMessages, message];
-
-        //3. Update group
-        const { error: updateError } = await supabase
-            .from(GROUPS_TABLE)
-            .update({
-                data: { ...currentData, chatMessages: updatedMessages }
-            })
-            .eq('group_id', groupId);
-
-        if (updateError) throw updateError;
+        await mutateGroupData(groupId, appendChatMessage(message));
     } catch (error) {
         console.error("Error sending message:", error);
         throw error;

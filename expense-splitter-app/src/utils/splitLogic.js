@@ -119,6 +119,16 @@ export const calculateSettlements = (balances, participants) => {
     return settlements;
 };
 
+// Map a Supabase auth user to their participant id in this group (participants use their own ids)
+export const findParticipantIdForUser = (participants, user) => {
+    if (!user || !participants?.length) return null;
+    const byId = participants.find(p => p.id === user.id);
+    if (byId) return byId.id;
+    const email = user.email?.toLowerCase();
+    if (!email) return null;
+    return participants.find(p => p.email?.toLowerCase() === email)?.id || null;
+};
+
 // Get only active participants (those involved in at least one expense)
 export const getActiveParticipants = (expenses, participants) => {
     const activeIds = new Set();

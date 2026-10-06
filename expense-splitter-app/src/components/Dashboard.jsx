@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowRight } from 'lucide-react';
 import { getParticipantHue } from '../utils/colors';
 
-const Dashboard = ({ totalPaid, count, participants, balances, settleUp, expenses, onSettle }) => {
+const Dashboard = ({ participants, balances, settleUp, expenses, onSettle }) => {
   // Settle up array should be passed from App.jsx or calculated here.
   // We'll calculate it if not passed.
   const nameOf = (id) => participants.find((p) => p.id === id)?.name || id;

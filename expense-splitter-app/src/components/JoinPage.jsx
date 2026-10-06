@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, ArrowRight, Loader } from 'lucide-react';
@@ -8,22 +8,16 @@ const JoinPage = () => {
     const { groupId } = useParams();
     const { user, loading } = useAuth();
     const navigate = useNavigate();
-    const [verifying, setVerifying] = useState(true);
 
     useEffect(() => {
-        if (!loading) {
-            if (user) {
-                // User is already logged in, redirect to app with group selection
-                // We'll pass the groupId in state so App.jsx can switch to it
-                navigate('/app', { state: { joinGroupId: groupId } });
-            } else {
-                // Not logged in, show the "Join Group" landing UI
-                setVerifying(false);
-            }
+        if (!loading && user) {
+            // Pass the groupId in state so App.jsx can switch to it
+            navigate('/app', { state: { joinGroupId: groupId } });
         }
     }, [user, loading, navigate, groupId]);
 
-    if (loading || verifying) {
+    // Logged-in users are being redirected; everyone else sees the "Join Group" landing UI
+    if (loading || user) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <Loader className="animate-spin text-indigo-600" size={32} />

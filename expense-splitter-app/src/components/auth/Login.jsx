@@ -37,7 +37,7 @@ const Login = () => {
                     navigate(from);
                 }
             }
-        } catch (err) {
+        } catch {
             setError('An unexpected error occurred');
         } finally {
             setLoading(false);

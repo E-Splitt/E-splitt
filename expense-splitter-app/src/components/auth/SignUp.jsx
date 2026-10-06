@@ -59,7 +59,7 @@ const SignUp = () => {
                     }
                 }, 2000);
             }
-        } catch (err) {
+        } catch {
             setError('An unexpected error occurred');
         } finally {
             setLoading(false);
@@ -180,6 +180,12 @@ const SignUp = () => {
                             />
                         </div>
                     </div>
+
+                    <p className="text-xs text-center" style={{ color: 'var(--muted)' }}>
+                        By creating an account you agree to our{' '}
+                        <Link to="/terms" className="underline">Terms</Link> and{' '}
+                        <Link to="/privacy" className="underline">Privacy Policy</Link>.
+                    </p>
 
                     {/* Submit Button */}
                     <button
