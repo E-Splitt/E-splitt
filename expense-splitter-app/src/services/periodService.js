@@ -43,7 +43,7 @@ export const createPeriod = async (groupId, name = null, startDate = new Date())
  * Close the current active period
  * Saves final balances and settlements snapshot
  */
-export const closePeriod = async (periodId, finalBalances, finalSettlements, totalExpenses, transactionCount) => {
+export const closePeriod = async (periodId, finalBalances, finalSettlements, totalExpenses, transactionCount, name = null) => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
@@ -58,7 +58,8 @@ export const closePeriod = async (periodId, finalBalances, finalSettlements, tot
                 final_balances: finalBalances,
                 final_settlements: finalSettlements,
                 total_expenses: totalExpenses,
-                transaction_count: transactionCount
+                transaction_count: transactionCount,
+                ...(name ? { name } : {})
             })
             .eq('id', periodId)
             .select()
@@ -155,7 +156,7 @@ export const subscribeToPeriods = (groupId, callback) => {
                 table: 'settlement_periods',
                 filter: `group_id=eq.${groupId}`
             },
-            (payload) => {
+            () => {
                 // Fetch updated periods and call callback
                 getPeriodsForGroup(groupId).then(callback);
             }

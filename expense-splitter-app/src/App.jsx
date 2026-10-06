@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/Dashboard';
-import { calculateBalances, getActiveParticipants } from './utils/splitLogic';
+import { calculateBalances, findParticipantIdForUser } from './utils/splitLogic';
 import ESplitLogo from './components/ESplitLogo';
 import { supabase } from './supabase';
 
@@ -19,9 +19,6 @@ import InviteMemberModal from './components/InviteMemberModal';
 import PinModal from './components/PinModal';
 import ActivityLog from './components/ActivityLog';
 import Chat from './components/Chat';
-import UserProfileModal from './components/UserProfileModal';
-import DevDashboard from './components/DevDashboard';
-import Analytics from './components/Analytics';
 import QuickAddExpense from './components/QuickAddExpense';
 import PeriodSelector from './components/PeriodSelector';
 import ClosePeriodModal from './components/ClosePeriodModal';
@@ -29,6 +26,8 @@ import PeriodArchive from './components/PeriodArchive';
 import PeriodDetailsView from './components/PeriodDetailsView';
 import ExportButton from './components/ExportButton';
 import { AnimatePresence, motion } from 'framer-motion';
+
+const Analytics = lazy(() => import('./components/Analytics'));
 
 // Icons
 import {
@@ -41,6 +40,7 @@ import {
 import {
   createGroupInSupabase,
   updateGroupInSupabase,
+  mutateGroupData,
   deleteGroupInSupabase,
   subscribeToGroups,
   subscribeToGroupData,
@@ -50,14 +50,14 @@ import {
 import {
   addGroupMember,
   removeGroupMember,
-  updateMemberRole
+  updateMemberRole,
+  getGroupMembers,
+  subscribeToGroupMembers
 } from './services/memberService';
 
 import {
   createPeriod,
   closePeriod,
-  getPeriodsForGroup,
-  getActivePeriod,
   subscribeToPeriods,
   ensureActivePeriod,
   deletePeriod
@@ -75,7 +75,17 @@ import {
   notifyPeriodClosed
 } from './utils/notifications';
 
-import { lockGroup } from './utils/crypto';
+import {
+  addExpense as addExpenseUpdate,
+  replaceExpense,
+  removeExpense,
+  archiveActiveExpenses,
+  addParticipant,
+  updateParticipant,
+  removeParticipant,
+  removeActivity,
+  compose
+} from './utils/groupMutations';
 
 import { getParticipantHue } from './utils/colors';
 
@@ -86,12 +96,10 @@ function App() {
   const [groups, setGroups] = useState([]);
   const [currentGroupId, setCurrentGroupId] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [members, setMembers] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [activityLog, setActivityLog] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
-  const [logoClickCount, setLogoClickCount] = useState(0);
-  const [isDevModalOpen, setIsDevModalOpen] = useState(false);
-  const [isMutating, setIsMutating] = useState(false); // Prevent subscription overwrites during mutations
 
   // Modals
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -117,7 +125,6 @@ function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('e-split-dark-mode') === 'true');
   const refreshGroupDataRef = useRef(null); // Store refresh function for manual sync
   const isMutatingRef = useRef(false); // Store mutation state for subscription callback
-  let logoClickTimer;
 
   // Dark mode effect
   useEffect(() => {
@@ -229,10 +236,8 @@ function App() {
       setPeriods(updatedPeriods);
 
       // Ensure we are selecting the Active period if none selected
-      if (!currentPeriodId) {
-        const active = updatedPeriods.find(p => p.status === 'active');
-        if (active) setCurrentPeriodId(active.id);
-      }
+      const active = updatedPeriods.find(p => p.status === 'active');
+      if (active) setCurrentPeriodId(prev => prev || active.id);
     });
 
     localStorage.setItem('lastGroupId', currentGroupId);
@@ -241,6 +246,14 @@ function App() {
       unsubscribeData();
       unsubscribePeriods();
     };
+  }, [currentGroupId]);
+
+  useEffect(() => {
+    if (!currentGroupId) {
+      setMembers([]);
+      return;
+    }
+    return subscribeToGroupMembers(currentGroupId, setMembers);
   }, [currentGroupId]);
 
   // Handlers
@@ -334,35 +347,14 @@ function App() {
     }
   };
 
-  const handleLogoClick = () => {
-    const newCount = logoClickCount + 1;
-    setLogoClickCount(newCount);
-
-    if (logoClickTimer) clearTimeout(logoClickTimer);
-
-    if (newCount >= 5) {
-      setIsDevModalOpen(true);
-      setLogoClickCount(0);
-    } else {
-      logoClickTimer = setTimeout(() => {
-        setLogoClickCount(0);
-      }, 2000);
-    }
-  };
-
-  const saveGroupData = async (updatedParticipants, updatedExpenses, newActivity = null) => {
-    let updatedActivityLog = activityLog;
-    if (newActivity) {
-      updatedActivityLog = [newActivity, ...activityLog].slice(0, 50);
-      setActivityLog(updatedActivityLog);
-    }
-
+  const saveGroupData = async (mutate) => {
     try {
-      await updateGroupInSupabase(currentGroupId, {
-        participants: updatedParticipants,
-        expenses: updatedExpenses,
-        activityLog: updatedActivityLog
-      });
+      const saved = await mutateGroupData(currentGroupId, mutate);
+      setParticipants(saved.participants || []);
+      setExpenses(saved.expenses || []);
+      setActivityLog(saved.activityLog || []);
+      setChatMessages(saved.chatMessages || []);
+      return saved;
     } catch (error) {
       console.error("Error saving group data:", error);
       throw error;
@@ -377,17 +369,15 @@ function App() {
     const description = formatActivityDescription('added', 'expense', newExpense);
     const activity = createActivity('added', actorName, 'expense', newExpense.id, description, { previousState: null });
 
-    setIsMutating(true);
     isMutatingRef.current = true;
     try {
-      await saveGroupData(participants, updatedExpenses, activity);
+      await saveGroupData(addExpenseUpdate(newExpense, activity));
       notifyNewExpense(newExpense.description, newExpense.amount, actorName);
       if (refreshGroupDataRef.current) refreshGroupDataRef.current();
     } catch (e) {
       console.error(e);
       setExpenses(expenses);
     } finally {
-      setIsMutating(false);
       isMutatingRef.current = false;
     }
   };
@@ -401,16 +391,14 @@ function App() {
     const description = formatActivityDescription('edited', 'expense', updatedExpense);
     const activity = createActivity('edited', actorName, 'expense', updatedExpense.id, description, { previousState: oldExpense });
 
-    setIsMutating(true);
     isMutatingRef.current = true;
     try {
-      await saveGroupData(participants, updatedExpenses, activity);
+      await saveGroupData(replaceExpense(updatedExpense, activity));
       if (refreshGroupDataRef.current) refreshGroupDataRef.current();
     } catch (error) {
       console.error(error);
       setExpenses(expenses);
     } finally {
-      setIsMutating(false);
       isMutatingRef.current = false;
     }
   };
@@ -434,12 +422,11 @@ function App() {
 
       // Set mutation lock to prevent subscription overwrites
       console.log('🔒 Setting mutation lock');
-      setIsMutating(true);
       isMutatingRef.current = true;
 
       try {
         console.log('💾 Saving to database...');
-        await saveGroupData(participants, updatedExpenses, activity);
+        await saveGroupData(removeExpense(expenseId, activity));
         console.log('✅ Save successful');
 
         notifyExpenseDeleted(deletedExpense?.description, actorName);
@@ -457,7 +444,6 @@ function App() {
       } finally {
         // Release mutation lock
         console.log('🔓 Releasing mutation lock');
-        setIsMutating(false);
         isMutatingRef.current = false;
         console.log('🗑️ DELETE COMPLETE');
       }
@@ -479,48 +465,56 @@ function App() {
     const description = `Recorded payment: ${fromPerson?.name} paid ${toPerson?.name} $${settlement.amount.toFixed(2)}`;
     const activity = createActivity('added', actorName, 'settlement', settlement.id, description, { previousState: null });
 
-    setIsMutating(true);
     isMutatingRef.current = true;
     try {
-      await saveGroupData(participants, updatedExpenses, activity);
+      await saveGroupData(addExpenseUpdate(settlement, activity));
       notifyPaymentRecorded(fromPerson?.name || 'Someone', toPerson?.name || 'Someone', settlement.amount);
       if (refreshGroupDataRef.current) refreshGroupDataRef.current();
     } catch (e) {
       console.error(e);
       setExpenses(expenses);
     } finally {
-      setIsMutating(false);
       isMutatingRef.current = false;
     }
     setIsSettleModalOpen(false);
   };
 
   const handleAddParticipant = async (newParticipant) => {
-    const updatedParticipants = [...participants, newParticipant];
-    setParticipants(updatedParticipants);
-    await saveGroupData(updatedParticipants, expenses);
+    setParticipants([...participants, newParticipant]);
+    try {
+      await saveGroupData(addParticipant(newParticipant));
+    } catch {
+      setParticipants(participants);
+      alert('Failed to add participant. Please try again.');
+      return;
+    }
     if (newParticipant.email) {
       try { await addGroupMember(currentGroupId, newParticipant.email, 'member'); } catch (e) { console.error(e); }
     }
   };
 
   const handleEditParticipant = async (participantId, updates) => {
-    const updatedParticipants = participants.map(p => p.id === participantId ? { ...p, ...updates } : p);
-    setParticipants(updatedParticipants);
-    await saveGroupData(updatedParticipants, expenses);
+    setParticipants(participants.map(p => p.id === participantId ? { ...p, ...updates } : p));
+    try {
+      await saveGroupData(updateParticipant(participantId, updates));
+    } catch {
+      setParticipants(participants);
+      alert('Failed to update participant. Please try again.');
+      return;
+    }
     if (updates.email) {
       try { await addGroupMember(currentGroupId, updates.email, 'member'); } catch (e) { console.error(e); }
     }
   };
 
-  const handleRemoveParticipant = (userId) => {
-    // Check balance
-    // For simplicity, we are checking logic later in calculateBalances, but here we need rudimentary check
-    // Let's verify via 'balances' which is calculated in render
-    if (confirm('Are you sure you want to remove this participant?')) {
-      const updatedParticipants = participants.filter(p => p.id !== userId);
-      setParticipants(updatedParticipants);
-      saveGroupData(updatedParticipants, expenses);
+  const handleRemoveParticipant = async (userId) => {
+    if (!confirm('Are you sure you want to remove this participant?')) return;
+    setParticipants(participants.filter(p => p.id !== userId));
+    try {
+      await saveGroupData(removeParticipant(userId));
+    } catch {
+      setParticipants(participants);
+      alert('Failed to remove participant. Please try again.');
     }
   };
 
@@ -541,17 +535,33 @@ function App() {
     try { await sendMessage(currentGroupId, message); } catch (e) { console.error(e); alert('Failed to send'); }
   };
 
+  const refreshMembers = () => getGroupMembers(currentGroupId).then(setMembers);
+
   const handleInviteMember = async (userEmail, role) => {
-    try { await addGroupMember(currentGroupId, userEmail, role); alert('Invited!'); } catch (e) { console.error(e); throw e; }
+    try {
+      const result = await addGroupMember(currentGroupId, userEmail, role);
+      if (!result) {
+        alert('No account found for that email. They need to sign up first.');
+        return;
+      }
+      await refreshMembers();
+      alert('Invited!');
+    } catch (e) { console.error(e); throw e; }
   };
 
   const handleRemoveMember = async (userId) => {
     if (!confirm('Remove member?')) return;
-    try { await removeGroupMember(currentGroupId, userId); } catch (e) { console.error(e); alert('Failed'); }
+    try {
+      await removeGroupMember(currentGroupId, userId);
+      await refreshMembers();
+    } catch (e) { console.error(e); alert('Failed to remove member'); }
   };
 
   const handleUpdateMemberRole = async (userId, newRole) => {
-    try { await updateMemberRole(currentGroupId, userId, newRole); } catch (e) { console.error(e); alert('Failed'); }
+    try {
+      await updateMemberRole(currentGroupId, userId, newRole);
+      await refreshMembers();
+    } catch (e) { console.error(e); alert('Failed to update role'); }
   };
 
   // ------------------------------------------------------------------
@@ -594,30 +604,24 @@ function App() {
     const { balances: finalBalances } = calculateBalances(currentActiveExpenses, participants);
     const finalSettlements = calculateSettlements(finalBalances, participants);
 
-    const totalPeriodExpenses = currentActiveExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
+    const totalPeriodExpenses = currentActiveExpenses
+      .filter(exp => !exp.isSettlement)
+      .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
     const transactionCount = currentActiveExpenses.length;
+    const closedName = periodName || periods.find(p => p.id === currentPeriodId)?.name || 'Current Period';
 
     try {
       if (!confirm('Are you sure you want to close this period? This will archive current expenses and start fresh.')) return;
 
       // 1. Snapshot
-      await closePeriod(currentPeriodId, finalBalances, finalSettlements, totalPeriodExpenses, transactionCount);
+      await closePeriod(currentPeriodId, finalBalances, finalSettlements, totalPeriodExpenses, transactionCount, periodName);
 
-      // 2. Archive Expenses
-      const updatedAllExpenses = expenses.map(e => {
-        if (!e.periodId) return { ...e, periodId: currentPeriodId };
-        return e;
-      });
-
-      // 3. Log
+      // 2. Archive active expenses and log it
       const actorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
-      const activity = createActivity('closed', actorName, 'period', currentPeriodId, `Closed period: ${periods.find(p => p.id === currentPeriodId)?.name}`, { previousState: null });
-      const updatedActivityLog = [activity, ...activityLog].slice(0, 100);
+      const activity = createActivity('closed', actorName, 'period', currentPeriodId, `Closed period: ${closedName}`, { previousState: null });
+      await saveGroupData(archiveActiveExpenses(currentPeriodId, activity));
 
-      // 4. Update Group
-      await updateGroupInSupabase(currentGroupId, { expenses: updatedAllExpenses, activityLog: updatedActivityLog });
-
-      notifyPeriodClosed(periods.find(p => p.id === currentPeriodId)?.name || 'Current Period');
+      notifyPeriodClosed(closedName);
 
       // 5. New Period
       const newPeriod = await createPeriod(currentGroupId, `Settlement ${new Date().toLocaleDateString()}`);
@@ -643,11 +647,6 @@ function App() {
     }
   };
 
-  const handleCreatePeriod = async () => {
-    const currentGroup = groups.find(g => g.id === currentGroupId);
-    if (currentGroup && currentGroup.pinEnabled) lockGroup(currentGroupId);
-  };
-
   // ------------------------------------------------------------------
 
   // Calculations for Render
@@ -665,28 +664,25 @@ function App() {
   });
 
   const { balances, totalPaid } = calculateBalances(periodExpenses, participants);
-  const activeParticipants = getActiveParticipants(periodExpenses, participants);
+  const currentParticipantId = findParticipantIdForUser(participants, user);
+  const currentUserRole = members.find(m => m.userId === user?.id)?.role || 'member';
   const totalExpenses = periodExpenses.filter(e => !e.isSettlement).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-  const avgPerPerson = activeParticipants.length > 0 ? totalExpenses / activeParticipants.length : 0;
 
   const handleUndo = async (activity) => {
     if (!activity.details?.previousState) { alert('Cannot undo'); return; }
     if (!confirm(`Undo: ${activity.description}?`)) return;
 
     const { previousState } = activity.details;
-    let updatedExpenses = [...expenses];
+    let revert = (data) => data;
 
     if (activity.targetType === 'expense') {
-      if (activity.action === 'added') updatedExpenses = expenses.filter(e => e.id !== activity.targetId);
-      else if (activity.action === 'edited') updatedExpenses = expenses.map(e => e.id === activity.targetId ? previousState : e);
-      else if (activity.action === 'deleted') updatedExpenses = [previousState, ...expenses];
+      if (activity.action === 'added') revert = removeExpense(activity.targetId);
+      else if (activity.action === 'edited') revert = replaceExpense(previousState);
+      else if (activity.action === 'deleted') revert = addExpenseUpdate(previousState);
     }
-    const updatedActivityLog = activityLog.filter(a => a.id !== activity.id);
-    setExpenses(updatedExpenses);
-    setActivityLog(updatedActivityLog);
 
-    try { await updateGroupInSupabase(currentGroupId, { expenses: updatedExpenses, activityLog: updatedActivityLog }); }
-    catch (e) { console.error("Undo failed:", e); }
+    try { await saveGroupData(compose(revert, removeActivity(activity.id))); }
+    catch (e) { console.error("Undo failed:", e); alert('Undo failed. Please try again.'); }
   };
 
   if (loading) {
@@ -713,7 +709,7 @@ function App() {
       <div className="shell">
         {/* ---------- desktop side ledger ---------- */}
         <aside className="side">
-          <div className="side-brand cursor-pointer" onClick={handleLogoClick}>
+          <div className="side-brand">
             <div className="side-mark">e/</div>
             <div>
               <div className="side-title">E-Split</div>
@@ -765,7 +761,6 @@ function App() {
                     periods={periods}
                     currentPeriod={currentPeriodId}
                     onSelectPeriod={setCurrentPeriodId}
-                    onCreatePeriod={() => createPeriod(currentGroupId).catch(console.error)}
                   />
                 </div>
               )}
@@ -836,7 +831,7 @@ function App() {
                       </div>
                     </div>
 
-                    <Dashboard totalPaid={totalPaid} balances={balances} participants={participants} currentUserId={user?.id} expenses={periodExpenses} onSettle={(fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })} />
+                    <Dashboard balances={balances} participants={participants} currentUserId={currentParticipantId} expenses={periodExpenses} onSettle={(fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })} />
                   </div>
 
                   {/* Quick Add Expense - Visible on Desktop/Tablet */}
@@ -844,7 +839,7 @@ function App() {
                     <QuickAddExpense
                       onAdd={handleAddExpense}
                       participants={participants}
-                      currentUserId={user?.id}
+                      currentUserId={currentParticipantId}
                     />
                   </div>
 
@@ -856,7 +851,18 @@ function App() {
 
               {activeTab === 'participants' && (
                 <motion.div key="participants" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="max-w-2xl">
-                  <ParticipantManager participants={participants} currentUserEmail={user?.email} onAdd={handleAddParticipant} onEdit={handleEditParticipant} onRemove={handleRemoveParticipant} />
+                  <ParticipantManager
+                    participants={participants}
+                    members={members}
+                    currentUserRole={currentUserRole}
+                    currentUserEmail={user?.email}
+                    onAdd={handleAddParticipant}
+                    onEdit={handleEditParticipant}
+                    onRemove={handleRemoveParticipant}
+                    onInviteMember={() => setIsInviteMemberModalOpen(true)}
+                    onRemoveMember={handleRemoveMember}
+                    onUpdateRole={handleUpdateMemberRole}
+                  />
                 </motion.div>
               )}
               {activeTab === 'activity' && (
@@ -871,7 +877,9 @@ function App() {
               )}
               {activeTab === 'analytics' && (
                 <motion.div key="analytics" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }}>
-                  <Analytics expenses={periodExpenses} participants={participants} />
+                  <Suspense fallback={<div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
+                    <Analytics expenses={periodExpenses} participants={participants} />
+                  </Suspense>
                 </motion.div>
               )}
               {activeTab === 'archive' && (
@@ -938,13 +946,10 @@ function App() {
       <ShareGroupModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} groupData={shareGroupData} />
       <PinModal isOpen={isPinModalOpen} onClose={() => { setIsPinModalOpen(false); setPinModalGroupId(null); }} onSubmit={handlePinSubmit} mode={pinModalMode} groupName={groups.find(g => g.id === pinModalGroupId)?.name} />
       <InviteMemberModal isOpen={isInviteMemberModalOpen} onClose={() => setIsInviteMemberModalOpen(false)} onInvite={handleInviteMember} groupName={groups.find(g => g.id === currentGroupId)?.name || 'this group'} groupId={currentGroupId} />
-      <DevDashboard isOpen={isDevModalOpen} onClose={() => setIsDevModalOpen(false)} />
-
       {/* Close Period / Archive Modal */}
       <ClosePeriodModal
         isOpen={isClosePeriodModalOpen}
         onClose={() => setIsClosePeriodModalOpen(false)}
-        period={periods.find(p => p.id === currentPeriodId)}
         balances={balances}
         settlements={calculateSettlements(balances, participants)}
         totalExpenses={totalExpenses}

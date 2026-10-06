@@ -1,7 +1,6 @@
 import { supabase } from '../supabase';
 
 // Table names
-const GROUPS_TABLE = 'groups';
 const GROUP_MEMBERS_TABLE = 'group_members';
 
 // ============================================
@@ -119,22 +118,17 @@ export const updateMemberRole = async (groupId, userId, newRole) => {
 export const getGroupMembers = async (groupId) => {
     try {
         const { data, error } = await supabase
-            .from(GROUP_MEMBERS_TABLE)
-            .select(`
-                *,
-                user:auth.users(id, email, raw_user_meta_data)
-            `)
-            .eq('group_id', groupId);
+            .rpc('get_group_members', { p_group_id: groupId });
 
         if (error) throw error;
 
-        return data.map(member => ({
+        return (data || []).map(member => ({
             id: member.id,
             userId: member.user_id,
             role: member.role,
             joinedAt: member.joined_at,
-            email: member.user?.email,
-            name: member.user?.raw_user_meta_data?.name || 'Unknown'
+            email: member.email,
+            name: member.name || 'Unknown'
         }));
     } catch (error) {
         console.error('Error getting group members:', error);
@@ -156,7 +150,7 @@ export const subscribeToGroupMembers = (groupId, callback) => {
                 table: GROUP_MEMBERS_TABLE,
                 filter: `group_id=eq.${groupId}`
             },
-            async (payload) => {
+            async () => {
                 // Fetch fresh members data
                 const members = await getGroupMembers(groupId);
                 callback(members);
@@ -172,125 +166,3 @@ export const subscribeToGroupMembers = (groupId, callback) => {
     };
 };
 
-// ============================================
-// PARTICIPANT EMAIL CLAIMING
-// ============================================
-
-/**
- * Find participants with matching email that can be claimed
- */
-export const findClaimableParticipants = async (userEmail) => {
-    try {
-        const { data, error } = await supabase
-            .from(GROUPS_TABLE)
-            .select('group_id, data');
-
-        if (error) throw error;
-
-        const claimable = [];
-
-        data.forEach(group => {
-            const participants = group.data?.participants || [];
-            participants.forEach(participant => {
-                if (participant.email === userEmail && !participant.claimed_by) {
-                    claimable.push({
-                        groupId: group.group_id,
-                        groupName: group.data?.name,
-                        participantId: participant.id,
-                        participantName: participant.name
-                    });
-                }
-            });
-        });
-
-        return claimable;
-    } catch (error) {
-        console.error('Error finding claimable participants:', error);
-        return [];
-    }
-};
-
-/**
- * Claim a participant profile
- */
-export const claimParticipant = async (groupId, participantId, userId) => {
-    try {
-        // Get current group data
-        const { data: groupData, error: fetchError } = await supabase
-            .from(GROUPS_TABLE)
-            .select('data')
-            .eq('group_id', groupId)
-            .single();
-
-        if (fetchError) throw fetchError;
-
-        // Update participant with claimed_by
-        const participants = groupData.data.participants.map(p => {
-            if (p.id === participantId) {
-                return {
-                    ...p,
-                    claimed_by: userId,
-                    claimed_at: new Date().toISOString()
-                };
-            }
-            return p;
-        });
-
-        // Save updated participants
-        const { error: updateError } = await supabase
-            .from(GROUPS_TABLE)
-            .update({
-                data: {
-                    ...groupData.data,
-                    participants
-                }
-            })
-            .eq('group_id', groupId);
-
-        if (updateError) throw updateError;
-
-        // Also add user as a member to the group
-        await addGroupMember(groupId, userId, 'member');
-
-    } catch (error) {
-        console.error('Error claiming participant:', error);
-        throw error;
-    }
-};
-
-/**
- * Add email to participant
- */
-export const addParticipantEmail = async (groupId, participantId, email) => {
-    try {
-        const { data: groupData, error: fetchError } = await supabase
-            .from(GROUPS_TABLE)
-            .select('data')
-            .eq('group_id', groupId)
-            .single();
-
-        if (fetchError) throw fetchError;
-
-        const participants = groupData.data.participants.map(p => {
-            if (p.id === participantId) {
-                return { ...p, email };
-            }
-            return p;
-        });
-
-        const { error: updateError } = await supabase
-            .from(GROUPS_TABLE)
-            .update({
-                data: {
-                    ...groupData.data,
-                    participants
-                }
-            })
-            .eq('group_id', groupId);
-
-        if (updateError) throw updateError;
-    } catch (error) {
-        console.error('Error adding participant email:', error);
-        throw error;
-    }
-};

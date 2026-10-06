@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 
 const AuthContext = createContext({});
 
+// eslint-disable-next-line react-refresh/only-export-components -- the hook is intentionally colocated with its provider
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {

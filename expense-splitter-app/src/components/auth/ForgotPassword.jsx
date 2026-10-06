@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Mail, ArrowLeft, Loader, AlertCircle, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
-const ForgotPassword = ({ onBack }) => {
+const ForgotPassword = () => {
+    const navigate = useNavigate();
+    const goToLogin = () => navigate('/login');
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -23,7 +26,7 @@ const ForgotPassword = ({ onBack }) => {
             } else {
                 setSuccess(true);
             }
-        } catch (err) {
+        } catch {
             setError('An unexpected error occurred');
         } finally {
             setLoading(false);
@@ -43,7 +46,8 @@ const ForgotPassword = ({ onBack }) => {
                             We've sent password reset instructions to <strong>{email}</strong>
                         </p>
                         <button
-                            onClick={onBack}
+                            type="button"
+                            onClick={goToLogin}
                             className="text-indigo-600 hover:text-indigo-700 font-semibold flex items-center justify-center gap-2 mx-auto"
                         >
                             <ArrowLeft size={20} />
@@ -60,7 +64,8 @@ const ForgotPassword = ({ onBack }) => {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
                 {/* Back Button */}
                 <button
-                    onClick={onBack}
+                    type="button"
+                    onClick={goToLogin}
                     className="text-gray-600 hover:text-gray-800 flex items-center gap-2 mb-6"
                 >
                     <ArrowLeft size={20} />

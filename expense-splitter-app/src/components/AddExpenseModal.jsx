@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createExpenseId } from '../utils/ids';
 import { X, Loader, Check, Receipt, Wallet } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getParticipantHue } from '../utils/colors';
@@ -102,7 +103,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         const shares = calculateShares();
 
         const expenseData = {
-            id: editExpense?.id || Date.now(),
+            id: editExpense?.id || createExpenseId(),
             date: editExpense?.date || new Date().toLocaleDateString(),
             expenseDate: editExpense?.expenseDate || new Date().toISOString().split('T')[0],
             description,

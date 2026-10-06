@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Search, MoreHorizontal, ShoppingBag, Home, Car, Utensils, Coffee, Trash2, Edit2, AlertTriangle } from 'lucide-react';
 import { getParticipantHue } from '../utils/colors';
 
@@ -17,6 +17,18 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
     const [sortBy, setSortBy] = useState('newest');
     const [pendingDeleteId, setPendingDeleteId] = useState(null);
     const [isExpanded, setIsExpanded] = useState(false);
+
+    const getPersonName = useCallback((userId, expense = null) => {
+        const person = participants.find(p => p.id === userId);
+        if (person) return person.name;
+
+        if (expense) {
+            if (expense.paidBy === userId && expense.paidByName) return expense.paidByName;
+            if (expense.paidTo === userId && expense.paidToName) return expense.paidToName;
+        }
+
+        return userId === 'Unknown' ? 'Unknown' : `Unknown (${userId})`;
+    }, [participants]);
 
     const filteredAndSorted = useMemo(() => {
         let result = expenses.filter(expense => {
@@ -52,19 +64,7 @@ const ExpenseList = ({ expenses, participants, onDelete, onEdit }) => {
         });
 
         return result;
-    }, [expenses, filter, searchQuery, sortBy]);
-
-    const getPersonName = (userId, expense = null) => {
-        const person = participants.find(p => p.id === userId);
-        if (person) return person.name;
-
-        if (expense) {
-            if (expense.paidBy === userId && expense.paidByName) return expense.paidByName;
-            if (expense.paidTo === userId && expense.paidToName) return expense.paidToName;
-        }
-
-        return userId === 'Unknown' ? 'Unknown' : `Unknown (${userId})`;
-    };
+    }, [expenses, filter, searchQuery, sortBy, getPersonName]);
 
     const handleDelete = (id) => {
         if (pendingDeleteId === id) {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { addGroupMember } from './memberService';
+import { addGroupMember, getGroupMembers } from './memberService';
 import { supabase } from '../supabase';
 
 // Mock supabase client
@@ -52,5 +52,30 @@ describe('addGroupMember', () => {
         supabase.rpc.mockResolvedValueOnce({ data: null, error: new Error('RPC error') });
 
         await expect(addGroupMember(groupId, userEmail)).rejects.toThrow('RPC error');
+    });
+});
+
+describe('getGroupMembers', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('loads members via the get_group_members RPC and maps fields', async () => {
+        supabase.rpc.mockResolvedValueOnce({
+            data: [{ id: 'm1', user_id: 'u1', role: 'owner', joined_at: '2026-01-01', email: 'a@x.com', name: 'Alice' }],
+            error: null
+        });
+
+        const members = await getGroupMembers('g_test123');
+
+        expect(supabase.rpc).toHaveBeenCalledWith('get_group_members', { p_group_id: 'g_test123' });
+        expect(members).toEqual([
+            { id: 'm1', userId: 'u1', role: 'owner', joinedAt: '2026-01-01', email: 'a@x.com', name: 'Alice' }
+        ]);
+    });
+
+    it('returns an empty list when the RPC fails', async () => {
+        supabase.rpc.mockResolvedValueOnce({ data: null, error: new Error('missing function') });
+        expect(await getGroupMembers('g_test123')).toEqual([]);
     });
 });
