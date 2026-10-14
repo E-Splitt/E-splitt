@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { appendChatMessage } from '../utils/groupMutations';
+import { buildOwnerParticipant } from '../utils/participants';
 
 // Table name
 const GROUPS_TABLE = 'groups';
@@ -25,12 +26,20 @@ export const createGroupInSupabase = async (groupData, customId = null) => {
 
         const groupId = customId || generateGroupId();
 
+        const ownerParticipant = buildOwnerParticipant(user);
         const newGroup = {
+            participants: ownerParticipant ? [ownerParticipant] : [],
+            expenses: [],
+            activityLog: [],
+            chatMessages: [],
+            pinEnabled: false,
             ...groupData,
             id: groupId,
             createdAt: new Date().toISOString(),
-            activityLog: [] // Initialize activity log
         };
+        if (!newGroup.participants?.length && ownerParticipant) {
+            newGroup.participants = [ownerParticipant];
+        }
 
         const { error } = await supabase
             .from(GROUPS_TABLE)

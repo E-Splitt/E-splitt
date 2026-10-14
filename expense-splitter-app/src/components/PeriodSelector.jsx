@@ -4,7 +4,8 @@ import { Calendar, ChevronDown, Check, Plus } from 'lucide-react';
 const PeriodSelector = ({
     periods = [],
     currentPeriod,
-    onSelectPeriod
+    onSelectPeriod,
+    onCreatePeriod
 }) => {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -84,6 +85,23 @@ const PeriodSelector = ({
                                 </button>
                             ))}
                         </div>
+
+                        {onCreatePeriod && (
+                            <div className="p-2" style={{ borderTop: '1px solid var(--border-secondary)' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onCreatePeriod();
+                                        setIsOpen(false);
+                                    }}
+                                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                                    style={{ color: 'var(--accent-indigo)' }}
+                                >
+                                    <Plus size={16} />
+                                    Start new period
+                                </button>
+                            </div>
+                        )}
 
                         {/* Closed Periods Section */}
                         {periods.filter(p => p.status === 'closed').length > 0 && (

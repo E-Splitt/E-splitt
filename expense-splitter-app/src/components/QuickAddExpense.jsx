@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Loader, AlertCircle, Check } from 'lucide-react';
+import { Plus, Loader, AlertCircle, Check, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { createExpenseId } from '../utils/ids';
 
 const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
@@ -20,7 +21,6 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
         }
     }, [participants, paidBy, defaultPayer]);
 
-    // Auto-dismiss error
     useEffect(() => {
         if (error) {
             const t = setTimeout(() => setError(''), 3000);
@@ -60,15 +60,13 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
                 }
                 shares[p.id] = shareCents / 100;
             });
-        } else {
-            shares[paidBy] = amountFloat;
         }
 
-        const expenseData = {
+        const newExpense = {
             id: createExpenseId(),
             date: new Date().toLocaleDateString(),
             expenseDate: new Date().toISOString().split('T')[0],
-            description,
+            description: description.trim(),
             amount: amountFloat,
             paidBy,
             category: 'other',
@@ -78,17 +76,14 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
 
         try {
             setIsSubmitting(true);
-            await onAdd(expenseData);
-
+            await onAdd(newExpense);
             setDescription('');
             setAmount('');
-            setPaidBy(defaultPayer);
-
-            // Success flash
+            setError('');
             setShowSuccess(true);
-            setTimeout(() => setShowSuccess(false), 1500);
-        } catch (error) {
-            console.error('Error adding expense:', error);
+            setTimeout(() => setShowSuccess(false), 1800);
+        } catch (err) {
+            console.error('QuickAdd failed:', err);
             setError('Failed to add expense');
         } finally {
             setIsSubmitting(false);
@@ -96,79 +91,90 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
     };
 
     return (
-        <div className="mb-6 space-y-1">
-            <form
-                onSubmit={handleSubmit}
-                className={`themed-card rounded-lg p-2 flex flex-col md:flex-row gap-2 items-center transition-all duration-300 ${showSuccess ? 'ring-2 ring-green-400 shadow-green-400/20 shadow-lg' : ''
-                    }`}
-            >
-                {/* Description Input */}
-                <div className="flex-grow w-full md:w-auto">
-                    <input
-                        type="text"
-                        value={description}
-                        onChange={(e) => { setDescription(e.target.value); setError(''); }}
-                        placeholder="Quick expense description..."
-                        className="themed-input w-full p-2 rounded-md text-sm"
-                    />
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+            className="themed-card rounded-2xl p-4 sm:p-5"
+        >
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg" style={{ backgroundColor: 'var(--teal-soft)', color: 'var(--teal)' }}>
+                        <Sparkles size={14} />
+                    </span>
+                    <h3 className="text-sm font-bold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
+                        Quick Split (Equal across {participants.length} {participants.length === 1 ? 'person' : 'people'})
+                    </h3>
                 </div>
+            </div>
 
-                {/* Amount Input */}
-                <div className="w-full md:w-32 relative">
-                    <span className="absolute left-2 top-2 text-sm" style={{ color: 'var(--text-muted)' }}>$</span>
+            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2.5">
+                <input
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Quick expense description..."
+                    className="themed-input flex-1 px-3.5 py-2.5 rounded-xl text-sm"
+                    disabled={isSubmitting}
+                />
+
+                <div className="relative sm:w-32">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm mono" style={{ color: 'var(--text-muted)' }}>$</span>
                     <input
                         type="number"
-                        value={amount}
-                        onChange={(e) => { setAmount(e.target.value); setError(''); }}
-                        placeholder="0.00"
                         step="0.01"
-                        className="themed-input w-full p-2 pl-6 rounded-md text-sm"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="themed-input w-full pl-7 pr-3 py-2.5 rounded-xl text-sm mono"
+                        disabled={isSubmitting}
                     />
                 </div>
 
-                {/* Paid By Selector */}
-                <div className="w-full md:w-40">
+                {participants.length > 0 && (
                     <select
                         value={paidBy}
                         onChange={(e) => setPaidBy(e.target.value)}
-                        className="themed-select w-full p-2 rounded-md text-sm"
+                        className="themed-select px-3 py-2.5 rounded-xl text-sm sm:w-36"
+                        disabled={isSubmitting}
                     >
-                        {participants.map(person => (
-                            <option key={person.id} value={person.id}>
-                                {person.id === currentUserId ? 'You' : person.name} paid
-                            </option>
+                        {participants.map(p => (
+                            <option key={p.id} value={p.id}>Paid by {p.name}</option>
                         ))}
                     </select>
-                </div>
+                )}
 
-                {/* Submit Button */}
-                <button
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.96 }}
                     type="submit"
                     disabled={isSubmitting}
-                    className={`w-full md:w-auto px-4 py-2 rounded-md font-medium flex items-center justify-center gap-1 transition-all hover:scale-105 whitespace-nowrap text-sm disabled:opacity-70 ${showSuccess
-                            ? 'bg-green-600 text-white'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                        }`}
+                    className="add-btn justify-center px-5 py-2.5 rounded-xl text-sm font-semibold"
                 >
                     {isSubmitting ? (
                         <Loader size={16} className="animate-spin" />
                     ) : showSuccess ? (
-                        <Check size={16} />
+                        <><Check size={16} /> Added</>
                     ) : (
-                        <Plus size={16} />
+                        <><Plus size={16} /> Split</>
                     )}
-                    {showSuccess ? 'Added!' : 'Add'}
-                </button>
+                </motion.button>
             </form>
 
-            {/* Inline error */}
-            {error && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-400 animate-pulse">
-                    <AlertCircle size={12} />
-                    {error}
-                </div>
-            )}
-        </div>
+            <AnimatePresence>
+                {error && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginTop: 10 }}
+                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                        className="flex items-center gap-1.5 text-xs text-red-500 font-medium overflow-hidden"
+                    >
+                        <AlertCircle size={14} />
+                        <span>{error}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
     );
 };
 

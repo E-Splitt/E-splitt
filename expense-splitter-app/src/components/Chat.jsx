@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User } from 'lucide-react';
+import { Send, MessageSquare } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 function Chat({ messages = [], currentUser, onSendMessage }) {
     const [newMessage, setNewMessage] = useState('');
@@ -22,66 +23,82 @@ function Chat({ messages = [], currentUser, onSendMessage }) {
     };
 
     return (
-        <div className="flex flex-col h-[600px] themed-card rounded-xl overflow-hidden">
+        <div className="flex flex-col h-[600px] themed-card rounded-2xl overflow-hidden">
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 scroll-smooth" style={{ backgroundColor: 'var(--bg-primary)' }}>
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full" style={{ color: 'var(--text-muted)' }}>
-                        <div className="p-4 rounded-full mb-2" style={{ backgroundColor: 'var(--bg-card-hover)' }}>
-                            <Send size={24} />
+                        <div className="p-4 rounded-2xl mb-3" style={{ backgroundColor: 'var(--teal-soft)', color: 'var(--teal)' }}>
+                            <MessageSquare size={24} />
                         </div>
-                        <p>No messages yet. Start the conversation!</p>
+                        <p className="font-semibold text-sm" style={{ color: 'var(--ink)' }}>No messages yet</p>
+                        <p className="text-xs mt-1">Discuss receipts, trip plans, or settlements with the group.</p>
                     </div>
                 ) : (
-                    messages.map((msg, index) => {
-                        const isMe = msg.userId === currentUser?.id;
-                        const showHeader = index === 0 || messages[index - 1].userId !== msg.userId;
+                    <AnimatePresence initial={false}>
+                        {messages.map((msg, index) => {
+                            const isMe = msg.userId === currentUser?.id;
+                            const showHeader = index === 0 || messages[index - 1].userId !== msg.userId;
 
-                        return (
-                            <div key={index} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`flex flex-col max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
-                                    {showHeader && !isMe && (
-                                        <span className="text-xs ml-1 mb-1" style={{ color: 'var(--text-muted)' }}>{msg.userName}</span>
-                                    )}
+                            return (
+                                <motion.div
+                                    key={msg.id || index}
+                                    initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    transition={{ type: 'spring', stiffness: 360, damping: 28 }}
+                                    className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                                >
+                                    <div className={`flex flex-col max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
+                                        {showHeader && !isMe && (
+                                            <span className="text-xs font-semibold ml-1 mb-1" style={{ color: 'var(--text-muted)' }}>
+                                                {msg.userName}
+                                            </span>
+                                        )}
 
-                                    <div
-                                        className={`px-4 py-2 rounded-2xl shadow-sm ${isMe
-                                            ? 'bg-indigo-600 text-white rounded-br-none'
-                                            : 'rounded-bl-none'
+                                        <div
+                                            className={`px-4 py-2.5 rounded-2xl shadow-sm ${
+                                                isMe ? 'text-white rounded-br-sm' : 'rounded-bl-sm'
                                             }`}
-                                        style={!isMe ? { backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' } : {}}
-                                    >
-                                        <p className="text-sm">{msg.text}</p>
-                                    </div>
+                                            style={
+                                                isMe
+                                                    ? { background: 'var(--brand-gradient)' }
+                                                    : { backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-primary)' }
+                                            }
+                                        >
+                                            <p className="text-sm leading-relaxed">{msg.text}</p>
+                                        </div>
 
-                                    <span className="text-[10px] mt-1 mx-1" style={{ color: 'var(--text-muted)' }}>
-                                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })
+                                        <span className="text-[10px] mt-1 mx-1 mono" style={{ color: 'var(--text-muted)' }}>
+                                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </AnimatePresence>
                 )}
                 <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
             <div className="p-4" style={{ backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--border-primary)' }}>
-                <form onSubmit={handleSubmit} className="flex gap-2">
+                <form onSubmit={handleSubmit} className="flex gap-2.5">
                     <input
                         type="text"
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder="Type a message..."
-                        className="themed-input flex-1 px-4 py-2 rounded-full"
+                        className="themed-input flex-1 px-4 py-2.5 rounded-xl text-sm"
                     />
-                    <button
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.94 }}
                         type="submit"
                         disabled={!newMessage.trim()}
-                        className="bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="add-btn px-4 py-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <Send size={20} />
-                    </button>
+                        <Send size={17} />
+                    </motion.button>
                 </form>
             </div>
         </div>
