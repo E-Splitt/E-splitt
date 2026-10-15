@@ -4,7 +4,8 @@ import { Calendar, ChevronDown, Check, Plus } from 'lucide-react';
 const PeriodSelector = ({
     periods = [],
     currentPeriod,
-    onSelectPeriod
+    onSelectPeriod,
+    onCreatePeriod
 }) => {
     const [isOpen, setIsOpen] = useState(false);
 

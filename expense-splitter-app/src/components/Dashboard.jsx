@@ -1,17 +1,36 @@
-import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowRight, Wallet, Users, Receipt, Sparkles, CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion';
 import { getParticipantHue } from '../utils/colors';
 
+/**
+ * Spring-animated number counter that smoothly interpolates values when totals change.
+ */
+const AnimatedValue = ({ value, prefix = '', decimals = 2 }) => {
+  const spring = useSpring(value, { stiffness: 140, damping: 22, mass: 0.8 });
+  const display = useTransform(spring, (current) => `${prefix}${Math.abs(current).toFixed(decimals)}`);
+  const [rendered, setRendered] = useState(`${prefix}${Math.abs(value).toFixed(decimals)}`);
+
+  useEffect(() => {
+    spring.set(value);
+  }, [value, spring]);
+
+  useEffect(() => {
+    const unsubscribe = display.on('change', (v) => setRendered(v));
+    return () => unsubscribe();
+  }, [display]);
+
+  return <span>{rendered}</span>;
+};
+
 const Dashboard = ({ participants, balances, settleUp, expenses, onSettle }) => {
-  // Settle up array should be passed from App.jsx or calculated here.
-  // We'll calculate it if not passed.
   const nameOf = (id) => participants.find((p) => p.id === id)?.name || id;
   const fmt = (n) => `$${Math.abs(n).toFixed(2)}`;
 
-  const total = expenses.filter(e => !e.isSettlement).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+  const nonSettlementExpenses = expenses.filter(e => !e.isSettlement);
+  const total = nonSettlementExpenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
   const perPerson = participants.length > 0 ? total / participants.length : 0;
-  
-  // Calculate settlements if not provided
+
   let activeSettlements = settleUp || [];
   if (!settleUp) {
     const debtors = [];
@@ -47,59 +66,143 @@ const Dashboard = ({ participants, balances, settleUp, expenses, onSettle }) => 
 
   return (
     <div className="stack-xl">
+      {/* SaaS KPI Metric Cards */}
       <section className="ledger-strip">
-        <div className="ledger-cell">
-          <div className="cell-label">Total spent</div>
-          <div className="cell-value mono">${total.toFixed(2)}</div>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 24, delay: 0.02 }}
+          className="ledger-card ledger-cell"
+        >
+          <div className="cell-label">
+            <span>Total spent</span>
+            <span className="p-1.5 rounded-lg" style={{ backgroundColor: 'var(--teal-soft)', color: 'var(--teal)' }}>
+              <Wallet size={14} />
+            </span>
+          </div>
+          <div className="cell-value mono">
+            <AnimatedValue value={total} prefix="$" decimals={2} />
+          </div>
+        </motion.div>
+
         <div className="ledger-div" />
-        <div className="ledger-cell">
-          <div className="cell-label">Per person</div>
-          <div className="cell-value mono accent-gold">${perPerson.toFixed(2)}</div>
-        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 24, delay: 0.08 }}
+          className="ledger-card ledger-cell"
+        >
+          <div className="cell-label">
+            <span>Per person</span>
+            <span className="p-1.5 rounded-lg" style={{ backgroundColor: 'var(--gold-soft)', color: 'var(--gold)' }}>
+              <Users size={14} />
+            </span>
+          </div>
+          <div className="cell-value mono accent-gold">
+            <AnimatedValue value={perPerson} prefix="$" decimals={2} />
+          </div>
+        </motion.div>
+
         <div className="ledger-div" />
-        <div className="ledger-cell">
-          <div className="cell-label">Entries</div>
-          <div className="cell-value mono">{expenses.filter(e => !e.isSettlement).length}</div>
-        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 24, delay: 0.14 }}
+          className="ledger-card ledger-cell"
+        >
+          <div className="cell-label">
+            <span>Entries</span>
+            <span className="p-1.5 rounded-lg" style={{ backgroundColor: 'var(--moss-soft)', color: 'var(--moss)' }}>
+              <Receipt size={14} />
+            </span>
+          </div>
+          <div className="cell-value mono">
+            <AnimatedValue value={nonSettlementExpenses.length} prefix="" decimals={0} />
+          </div>
+        </motion.div>
       </section>
 
+      {/* Animated Who Owes Who Settlement Section */}
       <section>
-        <h2 className="section-head">Who owes who</h2>
-        <div className="balance-card">
-          {activeSettlements.length === 0 && (
-            <div className="all-settled">
-              <div className="stamp">All settled</div>
-              <p>Nobody owes anybody. Nicely split.</p>
-            </div>
+        <div className="section-head-row">
+          <h2 className="section-head">Who owes who</h2>
+          {activeSettlements.length > 0 && (
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full saas-shimmer-badge">
+              <Sparkles size={11} className="inline mr-1" />
+              {activeSettlements.length} simplified {activeSettlements.length === 1 ? 'transfer' : 'transfers'}
+            </span>
           )}
-          {activeSettlements.map((s, i) => {
-            const fromId = typeof s.from === 'object' ? s.from.id : s.from;
-            const toId = typeof s.to === 'object' ? s.to.id : s.to;
-            const amt = s.amt || s.amount;
-
-            return (
-              <div className="settle-row" key={i}>
-                <div className="settle-people">
-                  <div className="avatar-chip" data-hue={getAvatarHue(fromId)} style={{ width: 32, height: 32, fontSize: 13 }}>
-                    {getInitial(fromId)}
-                  </div>
-                  <ArrowRight size={14} className="muted" />
-                  <div className="avatar-chip" data-hue={getAvatarHue(toId)} style={{ width: 32, height: 32, fontSize: 13 }}>
-                    {getInitial(toId)}
-                  </div>
-                  <span>
-                    <strong>{nameOf(fromId)}</strong> owes <strong>{nameOf(toId)}</strong>
-                  </span>
-                </div>
-                <div className="settle-right">
-                  <span className="mono amt-coral">{fmt(amt)}</span>
-                  <button className="mini-btn" onClick={() => onSettle && onSettle(fromId, toId, amt)}>Settle</button>
-                </div>
-              </div>
-            );
-          })}
         </div>
+
+        <motion.div layout className="balance-card">
+          <AnimatePresence mode="popLayout" initial={false}>
+            {activeSettlements.length === 0 ? (
+              <motion.div
+                key="all-settled-state"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                className="all-settled"
+              >
+                <motion.div
+                  initial={{ rotate: -8, scale: 0.85 }}
+                  animate={{ rotate: -2, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 350, damping: 18 }}
+                  className="stamp"
+                >
+                  <CheckCircle2 size={14} /> All settled
+                </motion.div>
+                <p>Nobody owes anybody. Nicely split.</p>
+              </motion.div>
+            ) : (
+              activeSettlements.map((s, i) => {
+                const fromId = typeof s.from === 'object' ? s.from.id : s.from;
+                const toId = typeof s.to === 'object' ? s.to.id : s.to;
+                const amt = s.amt || s.amount;
+                const rowKey = `${fromId}->${toId}`;
+
+                return (
+                  <motion.div
+                    layout
+                    key={rowKey}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: 24, scale: 0.96 }}
+                    transition={{ type: 'spring', stiffness: 340, damping: 28, delay: i * 0.04 }}
+                    className="settle-row"
+                  >
+                    <div className="settle-people">
+                      <div className="avatar-chip" data-hue={getAvatarHue(fromId)} style={{ width: 32, height: 32, fontSize: 13 }}>
+                        {getInitial(fromId)}
+                      </div>
+                      <ArrowRight size={14} className="muted" />
+                      <div className="avatar-chip" data-hue={getAvatarHue(toId)} style={{ width: 32, height: 32, fontSize: 13 }}>
+                        {getInitial(toId)}
+                      </div>
+                      <span>
+                        <strong>{nameOf(fromId)}</strong> owes <strong>{nameOf(toId)}</strong>
+                      </span>
+                    </div>
+                    <div className="settle-right">
+                      <span className="mono amt-coral font-semibold">{fmt(amt)}</span>
+                      <motion.button
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="mini-btn"
+                        onClick={() => onSettle && onSettle(fromId, toId, amt)}
+                      >
+                        Settle
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
+          </AnimatePresence>
+        </motion.div>
       </section>
     </div>
   );
