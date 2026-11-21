@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './household.css'
 import AppRouter from './AppRouter.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { AuthProvider } from './contexts/AuthContext'

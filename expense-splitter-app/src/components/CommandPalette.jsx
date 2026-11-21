@@ -48,6 +48,7 @@ const CommandPaletteModal = ({
     const quickActions = [
       {
         id: 'action-add-expense',
+        available: Boolean(onOpenAddExpense),
         title: 'Add New Expense',
         subtitle: 'Record a shared payment or bill',
         category: 'Actions',
@@ -62,6 +63,7 @@ const CommandPaletteModal = ({
       },
       {
         id: 'action-settle-up',
+        available: Boolean(onOpenSettleUp),
         title: 'Settle Up Balances',
         subtitle: 'Record a debt settlement payment',
         category: 'Actions',
@@ -101,7 +103,7 @@ const CommandPaletteModal = ({
           onOpenPinModal?.();
         }
       }
-    ];
+    ].filter(action => action.available !== false);
 
     // 2. Navigation Tabs
     const navigationTabs = [

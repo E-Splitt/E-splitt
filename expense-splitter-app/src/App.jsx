@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import AuthPage from './components/auth/AuthPage';
 import Dashboard from './components/Dashboard';
-import { calculateBalances, findParticipantIdForUser } from './utils/splitLogic';
+import { calculateBalances, calculateSettlements, findParticipantIdForUser } from './utils/splitLogic';
 import ESplitLogo from './components/ESplitLogo';
 import { supabase } from './supabase';
 
@@ -58,8 +58,9 @@ import {
 } from './services/memberService';
 
 import {
-  createPeriod,
   closePeriod,
+  addArchivedExpense,
+  editArchivedExpense,
   subscribeToPeriods,
   ensureActivePeriod,
   deletePeriod
@@ -81,7 +82,6 @@ import {
   addExpense as addExpenseUpdate,
   replaceExpense,
   removeExpense,
-  archiveActiveExpenses,
   addParticipant,
   updateParticipant,
   removeParticipant,
@@ -90,7 +90,7 @@ import {
 } from './utils/groupMutations';
 
 import { getParticipantHue } from './utils/colors';
-import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked, lockGroup } from './utils/crypto';
+import { hashPin, verifyPin, isGroupUnlocked, markGroupUnlocked } from './utils/crypto';
 
 function App() {
   const { user, loading, signOut } = useAuth();
@@ -123,6 +123,7 @@ function App() {
   const [periods, setPeriods] = useState([]);
   const [currentPeriodId, setCurrentPeriodId] = useState(null);
   const [isClosePeriodModalOpen, setIsClosePeriodModalOpen] = useState(false);
+  const [archiveAddPeriod, setArchiveAddPeriod] = useState(null);
   const [viewPeriodDetails, setViewPeriodDetails] = useState(null);
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -233,10 +234,13 @@ function App() {
       return;
     }
 
+    setCurrentPeriodId(null);
+    setPeriods([]);
+    let subscribed = true;
     // Load Group Data (Expenses, Chat, etc)
     const handleGroupDataUpdate = (data) => {
       console.log('🔄 Subscription update received. isMutating:', isMutatingRef.current, 'Expenses count:', data?.expenses?.length);
-      if (data && !isMutatingRef.current) { // Check ref instead of state
+      if (subscribed && data && !isMutatingRef.current) { // Check ref instead of state
         console.log('✅ Applying subscription update');
         setParticipants(data.participants || []);
         setExpenses(data.expenses || []);
@@ -255,7 +259,7 @@ function App() {
         .eq('group_id', currentGroupId)
         .single()
         .then(({ data, error }) => {
-          if (!error && data) {
+          if (subscribed && !error && data) {
             setParticipants(data.data.participants || []);
             setExpenses(data.data.expenses || []);
             setActivityLog(data.data.activityLog || []);
@@ -268,13 +272,14 @@ function App() {
 
     // Load Periods
     ensureActivePeriod(currentGroupId).then(active => {
-      if (active) setCurrentPeriodId(active.id);
-    });
+      if (subscribed && active) setCurrentPeriodId(active.id);
+    }).catch(error => console.error('Period initialization failed', error));
 
     // Subscribe to Periods
     console.log('DEBUG: Subscribing to periods for', currentGroupId);
     const unsubscribePeriods = subscribeToPeriods(currentGroupId, (updatedPeriods) => {
       console.log('DEBUG: Periods fetched:', updatedPeriods);
+      if (!subscribed) return;
       setPeriods(updatedPeriods);
 
       // Ensure we are selecting the Active period if none selected
@@ -285,6 +290,7 @@ function App() {
     localStorage.setItem('lastGroupId', currentGroupId);
 
     return () => {
+      subscribed = false;
       unsubscribeData();
       unsubscribePeriods();
     };
@@ -428,12 +434,25 @@ function App() {
     } catch (e) {
       console.error(e);
       setExpenses(expenses);
+      throw e;
     } finally {
       isMutatingRef.current = false;
     }
   };
 
+  const handleAddArchivedExpense = async (expense) => {
+    const saved = await addArchivedExpense(currentGroupId, archiveAddPeriod.id, expense);
+    setExpenses(current => [saved.expense, ...current.filter(e => e.id !== saved.expense.id)]);
+    setPeriods(current => current.map(p => p.id === saved.period.id ? saved.period : p));
+  };
+
   const handleEditExpense = async (updatedExpense) => {
+    if (editExpense?.periodId) {
+      const saved = await editArchivedExpense(currentGroupId, editExpense, updatedExpense);
+      setExpenses(current => current.map(e => e.id === saved.expense.id ? saved.expense : e));
+      setPeriods(current => current.map(p => p.id === saved.period.id ? saved.period : p));
+      return;
+    }
     const oldExpense = expenses.find(e => e.id === updatedExpense.id);
     const updatedExpenses = expenses.map(e => e.id === updatedExpense.id ? updatedExpense : e);
     setExpenses(updatedExpenses);
@@ -449,6 +468,7 @@ function App() {
     } catch (error) {
       console.error(error);
       setExpenses(expenses);
+      throw error;
     } finally {
       isMutatingRef.current = false;
     }
@@ -524,6 +544,7 @@ function App() {
     } catch (e) {
       console.error(e);
       setExpenses(expenses);
+      throw e;
     } finally {
       isMutatingRef.current = false;
     }
@@ -619,85 +640,14 @@ function App() {
   //  Start Helper Functions (that were potentially misplaced)
   // ------------------------------------------------------------------
 
-  const calculateSettlements = (balances, participants) => {
-    const settlements = [];
-    const debtors = [];
-    const creditors = [];
-
-    Object.entries(balances).forEach(([userId, balance]) => {
-      const participant = participants.find(p => p.id === userId);
-      if (balance < -0.01) debtors.push({ id: userId, name: participant?.name || 'Unknown', amount: -balance });
-      else if (balance > 0.01) creditors.push({ id: userId, name: participant?.name || 'Unknown', amount: balance });
-    });
-
-    debtors.sort((a, b) => b.amount - a.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
-
-    let i = 0, j = 0;
-    while (i < debtors.length && j < creditors.length) {
-      const debtor = debtors[i];
-      const creditor = creditors[j];
-      const amount = Math.min(debtor.amount, creditor.amount);
-      settlements.push({ from: { id: debtor.id, name: debtor.name }, to: { id: creditor.id, name: creditor.name }, amount });
-      debtor.amount -= amount;
-      creditor.amount -= amount;
-      if (debtor.amount < 0.01) i++;
-      if (creditor.amount < 0.01) j++;
-    }
-    return settlements;
-  };
-
-  const handleClosePeriod = async (periodName) => {
-    if (!currentPeriodId) return;
-
-    // Calculate final balances/settlements based on current active expenses
-    const currentActiveExpenses = expenses.filter(e => !e.periodId);
-    const { balances: finalBalances } = calculateBalances(currentActiveExpenses, participants);
-    const finalSettlements = calculateSettlements(finalBalances, participants);
-
-    const totalPeriodExpenses = currentActiveExpenses
-      .filter(exp => !exp.isSettlement)
-      .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
-    const transactionCount = currentActiveExpenses.length;
-    const closedName = periodName || periods.find(p => p.id === currentPeriodId)?.name || 'Current Period';
-
-    try {
-      if (!confirm('Are you sure you want to close this period? This will archive current expenses and start fresh.')) return;
-
-      // 1. Snapshot
-      await closePeriod(currentPeriodId, finalBalances, finalSettlements, totalPeriodExpenses, transactionCount, periodName);
-
-      // 2. Archive active expenses and log it
-      const actorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
-      const activity = createActivity('closed', actorName, 'period', currentPeriodId, `Closed period: ${closedName}`, { previousState: null });
-      await saveGroupData(archiveActiveExpenses(currentPeriodId, activity));
-
-      notifyPeriodClosed(closedName);
-
-      // 5. New Period
-      const newPeriod = await createPeriod(currentGroupId, `Settlement ${new Date().toLocaleDateString()}`);
-      setCurrentPeriodId(newPeriod.id);
-      setIsClosePeriodModalOpen(false);
-
-    } catch (error) {
-      console.error('Error closing period:', error);
-      alert('Failed to close period');
-    }
-  };
-
-  const handleCreatePeriod = async () => {
-    if (!currentGroupId) return;
-    try {
-      const currentGroup = groups.find(g => g.id === currentGroupId);
-      if (currentGroup?.pinEnabled) lockGroup(currentGroupId);
-      const newPeriod = await createPeriod(currentGroupId);
-      setCurrentPeriodId(newPeriod.id);
-    } catch (error) {
-      console.error('Error creating period:', error);
-      alert(
-        'Could not create a period. Run supabase_members_and_periods.sql in Supabase if tables are missing.'
-      );
-    }
+  const handleClosePeriod = async (name) => {
+    if (currentPeriod?.status !== 'active') throw new Error('Select an active period');
+    const actor = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+    const activity = createActivity('closed', actor, 'period', currentPeriod.id, `Closed period: ${name}`, { previousState: null });
+    const next = await closePeriod(currentGroupId, currentPeriod.id, name, activity);
+    setCurrentPeriodId(next.id);
+    refreshGroupDataRef.current?.();
+    notifyPeriodClosed(name);
   };
 
   const handleDeletePeriod = async (periodId) => {
@@ -718,6 +668,20 @@ function App() {
   // Calculations for Render
   const currentPeriod = periods.find(p => p.id === currentPeriodId);
 
+  const detailPeriod = periods.find(p => p.id === viewPeriodDetails?.id);
+  const detailExpenses = useMemo(
+    () => detailPeriod ? expenses.filter(e => e.periodId === detailPeriod.id) : [],
+    [expenses, detailPeriod]
+  );
+  const expenseEditorParticipants = useMemo(() => {
+    if (!editExpense?.periodId) return participants;
+    const historicalIds = new Set([editExpense.paidBy, ...Object.keys(editExpense.shares || {})]);
+    participants.forEach(participant => historicalIds.delete(participant.id));
+    return [...participants, ...Array.from(historicalIds, id => ({
+      id, name: (id === editExpense.paidBy && editExpense.paidByName) || id
+    }))];
+  }, [editExpense, participants]);
+  const archived = currentPeriod?.status === 'closed';
   const periodExpenses = expenses.filter(e => {
     // If current period is closed, show only expenses from that period
     if (currentPeriod?.status === 'closed') {
@@ -762,11 +726,11 @@ function App() {
   if (!user) return <AuthPage />;
 
   const nav = [
-    { key: 'dashboard', icon: TrendingUp, label: 'Dashboard' },
-    { key: 'participants', icon: Users, label: `People (${participants.length})` },
+    { key: 'dashboard', icon: TrendingUp, label: 'Overview' },
+    { key: 'participants', icon: Users, label: 'People' },
     { key: 'activity', icon: Clock, label: 'Activity' },
     { key: 'chat', icon: MessageSquare, label: 'Chat' },
-    { key: 'analytics', icon: BarChart3, label: 'Stats' },
+    { key: 'analytics', icon: BarChart3, label: 'Spending' },
     { key: 'archive', icon: Calendar, label: 'Archive' },
   ];
 
@@ -776,28 +740,17 @@ function App() {
         {/* ---------- desktop side ledger ---------- */}
         <aside className="side">
           <div className="side-brand">
-            <motion.div
-              whileHover={{ rotate: -6, scale: 1.06 }}
-              transition={{ type: 'spring', stiffness: 360, damping: 18 }}
-              className="side-mark"
-            >
-              e/
-            </motion.div>
-            <div>
-              <div className="side-title">E-Split</div>
-              <div className="side-sub truncate max-w-[130px]">
-                {groups.find(g => g.id === currentGroupId)?.name || 'No Group'}
-              </div>
-            </div>
+            <ESplitLogo size={35} />
+            <div className="side-title">E-Split</div>
           </div>
-          <nav className="side-nav">
+          <nav className="side-nav" aria-label="Household navigation">
             {nav.map((n) => {
               const isActive = activeTab === n.key;
               return (
                 <motion.button
                   key={n.key}
                   whileTap={{ scale: 0.97 }}
-                  className={`side-tab ${isActive ? "active" : ""}`}
+                  className={`side-tab ${isActive ? "active" : ""}`} aria-current={isActive ? 'page' : undefined}
                   onClick={() => handleTabChange(n.key)}
                 >
                   {isActive && (
@@ -832,7 +785,7 @@ function App() {
           <header className="topbar">
             <motion.button
               whileTap={{ scale: 0.92 }}
-              className="icon-btn only-mobile"
+              className="icon-btn only-mobile" aria-label="Menu" aria-expanded={isMobileMenuOpen}
               onClick={() => setIsMobileMenuOpen((v) => !v)}
             >
               {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -854,13 +807,13 @@ function App() {
               </div>
               
               {currentGroupId && (
-                <div className="hidden sm:block">
+                <div className="topbar-period">
                   <span className="crumb">Period</span>
                   <PeriodSelector
                     periods={periods}
                     currentPeriod={currentPeriodId}
                     onSelectPeriod={setCurrentPeriodId}
-                    onCreatePeriod={handleCreatePeriod}
+                    onCreatePeriod={currentPeriod?.status === 'active' ? () => setIsClosePeriodModalOpen(true) : undefined}
                   />
                 </div>
               )}
@@ -901,8 +854,8 @@ function App() {
               <motion.button
                 whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.96 }}
-                className="add-btn"
-                onClick={() => setIsExpenseModalOpen(true)}
+                className="add-btn" aria-label="Add expense"
+                disabled={archived || !currentGroupId} onClick={() => setIsExpenseModalOpen(true)}
               >
                 <Plus size={17} /> <span className="only-desktop">Add expense</span>
               </motion.button>
@@ -943,7 +896,14 @@ function App() {
           <div className="flex flex-1 overflow-hidden">
             <main ref={mainScrollRef} className="content overflow-y-auto">
               <AnimatePresence mode="wait">
-                {activeTab === 'dashboard' && (
+                {activeTab === 'dashboard' && !currentGroupId && (
+                  <section key="no-household" className="workspace-empty">
+                    <Users size={29} />
+                    <h1>Set up your household</h1>
+                    <p>Use the group menu above to create a household or join with an invite link.</p>
+                  </section>
+                )}
+                {activeTab === 'dashboard' && currentGroupId && (
                   <motion.div
                     key="dashboard"
                     initial={{ opacity: 0, y: 14 }}
@@ -952,26 +912,21 @@ function App() {
                     transition={{ type: 'spring', stiffness: 320, damping: 28 }}
                   >
                     <div className="mb-8">
-                      <div className="flex items-center justify-between mb-5">
+                      <div className="workspace-heading">
                         <div>
-                          <h2 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)', fontFamily: 'Space Grotesk, sans-serif' }}>
-                            Dashboard
-                          </h2>
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>
-                            Real-time group balances and simplified settlements
-                          </p>
+                          <div className="workspace-period"><Calendar size={14} /> {archived ? 'Archived period' : 'Current period'}{currentPeriod?.name ? ` · ${currentPeriod.name}` : ''}</div>
+                          <h1>{groups.find(group => group.id === currentGroupId)?.name || 'Your household'}</h1>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="workspace-heading-actions">
                           <ExportButton expenses={periodExpenses} participants={participants} />
                           <motion.button
                             whileHover={{ scale: 1.03 }}
                             whileTap={{ scale: 0.96 }}
-                            onClick={() => setIsClosePeriodModalOpen(true)}
-                            className="flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold rounded-xl transition-colors cursor-pointer border"
-                            style={{ backgroundColor: 'var(--moss-soft)', color: 'var(--moss)', borderColor: 'rgba(16, 185, 129, 0.25)' }}
+                            disabled={currentPeriod?.status !== 'active'} onClick={() => setIsClosePeriodModalOpen(true)}
+                            className="secondary-button"
                           >
                             <Calendar size={15} />
-                            Settle & Archive
+                            Close period
                           </motion.button>
                         </div>
                       </div>
@@ -981,12 +936,11 @@ function App() {
                         participants={participants}
                         currentUserId={currentParticipantId}
                         expenses={periodExpenses}
-                        onSettle={(fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })}
+                        onSettle={archived ? undefined : (fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })}
                       />
                     </div>
 
-                    {/* Quick Add Expense - Visible on Desktop/Tablet */}
-                    <div className="hidden sm:block mb-6">
+                    <div hidden={archived || !currentGroupId} className="mb-6">
                       <QuickAddExpense
                         onAdd={handleAddExpense}
                         participants={participants}
@@ -998,7 +952,7 @@ function App() {
                       <ExpenseList
                         expenses={periodExpenses}
                         participants={participants}
-                        onDelete={handleDeleteExpense}
+                        onDelete={archived ? undefined : handleDeleteExpense}
                         onEdit={handleOpenEditExpense}
                         selectedMemberId={selectedMemberFilter}
                         onSelectMember={setSelectedMemberFilter}
@@ -1086,29 +1040,20 @@ function App() {
             </main>
 
             {/* Right Sidebar for Contributions */}
-            <aside className="hidden xl:block w-72 2xl:w-80 border-l flex-shrink-0 overflow-y-auto" style={{ borderColor: 'var(--line)', backgroundColor: 'var(--card-elevated)' }}>
+            <aside className="household-sidebar hidden xl:block w-64 2xl:w-72 border-l flex-shrink-0 overflow-y-auto" style={{ borderColor: 'var(--line)', backgroundColor: 'var(--card-elevated)' }}>
               <div className="p-6">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-bold tracking-widest uppercase" style={{ color: 'var(--muted)' }}>
-                    Member Contributions
+                    Household contributions
                   </h3>
-                  {selectedMemberFilter ? (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMemberFilter(null)}
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full cursor-pointer border-none"
-                      style={{ backgroundColor: 'var(--coral-soft)', color: 'var(--coral)' }}
-                    >
-                      Clear filter ✕
+                  {selectedMemberFilter && (
+                    <button type="button" className="text-link" onClick={() => setSelectedMemberFilter(null)}>
+                      Clear
                     </button>
-                  ) : (
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--teal-soft)', color: 'var(--teal)' }}>
-                      Click to filter
-                    </span>
                   )}
                 </div>
                 <p className="text-[11px] mb-5" style={{ color: 'var(--muted)' }}>
-                  Click any member to inspect their expenses
+                  Select a person to filter the expense list.
                 </p>
                 <div className="space-y-4">
                   {participants.map((p, idx) => {
@@ -1205,8 +1150,8 @@ function App() {
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
-        onOpenAddExpense={() => setIsExpenseModalOpen(true)}
-        onOpenSettleUp={() => setIsSettleModalOpen(true)}
+        onOpenAddExpense={archived ? undefined : () => setIsExpenseModalOpen(true)}
+        onOpenSettleUp={archived ? undefined : () => setIsSettleModalOpen(true)}
         onSelectTab={handleTabChange}
         onSelectMember={handleSelectMemberContribution}
         onToggleTheme={() => setDarkMode(d => !d)}
@@ -1214,7 +1159,6 @@ function App() {
         darkMode={darkMode}
         participants={participants}
       />
-      <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => { setIsExpenseModalOpen(false); setEditExpense(null); }} onAdd={handleAddExpense} onEdit={handleEditExpense} participants={participants} editExpense={editExpense} />
       <SettleUpModal isOpen={isSettleModalOpen} onClose={() => { setIsSettleModalOpen(false); setSettlePrefill(null); }} onSettle={handleSettle} participants={participants} prefill={settlePrefill} />
       <ShareGroupModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} groupData={shareGroupData} />
       <PinModal isOpen={isPinModalOpen} onClose={() => { setIsPinModalOpen(false); setPinModalGroupId(null); }} onSubmit={handlePinSubmit} mode={pinModalMode} groupName={groups.find(g => g.id === pinModalGroupId)?.name} />
@@ -1232,14 +1176,32 @@ function App() {
         onConfirm={handleClosePeriod}
       />
 
-      {viewPeriodDetails && (
+      {detailPeriod && (
         <PeriodDetailsView
-          period={viewPeriodDetails}
-          expenses={expenses.filter(e => e.periodId === viewPeriodDetails.id)}
+          period={detailPeriod}
+          expenses={detailExpenses}
+          onEditExpense={handleOpenEditExpense}
+          onAddExpense={() => {
+            setArchiveAddPeriod(detailPeriod);
+            setIsExpenseModalOpen(true);
+          }}
           participants={participants}
           onClose={() => setViewPeriodDetails(null)}
         />
       )}
+      <AddExpenseModal
+        isOpen={isExpenseModalOpen}
+        onClose={() => {
+          setIsExpenseModalOpen(false);
+          setEditExpense(null);
+          setArchiveAddPeriod(null);
+        }}
+        onAdd={archiveAddPeriod ? handleAddArchivedExpense : handleAddExpense}
+        onEdit={handleEditExpense}
+        participants={expenseEditorParticipants}
+        editExpense={editExpense}
+        archivePeriod={archiveAddPeriod}
+      />
     </div>
   );
 }

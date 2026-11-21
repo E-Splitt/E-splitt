@@ -43,3 +43,5 @@ Once deployed, you will get a URL (e.g., `https://your-app-name.netlify.app`).
    - Copy the link or download the JSON file.
    - Send it to your friend.
    - They can import it to see the same expenses!
+
+Before deploying this client, apply `supabase_atomic_periods.sql` after `supabase_members_and_periods.sql`. It adds the transactional period functions and audited archived expense additions and edits. The script can be reapplied to upgrade an existing installation.

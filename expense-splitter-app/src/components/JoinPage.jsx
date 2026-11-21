@@ -45,7 +45,7 @@ const JoinPage = () => {
                         <Link
                             to="/signup"
                             state={{ joinGroupId: groupId }} // Pass groupId to signup
-                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                            className="add-btn full auth-primary"
                         >
                             Create Account to Join
                         </Link>
@@ -64,7 +64,7 @@ const JoinPage = () => {
                         <Link
                             to="/login"
                             state={{ joinGroupId: groupId }} // Pass groupId to login
-                            className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                            className="secondary-button w-full"
                         >
                             Log in
                         </Link>

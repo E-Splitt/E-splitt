@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext';
 import App from './App';
 import LandingPage from './components/LandingPage';
 import JoinPage from './components/JoinPage';
+import AuthLayout from './components/auth/AuthLayout';
 import Login from './components/auth/Login';
 import SignUp from './components/auth/SignUp';
 import ForgotPassword from './components/auth/ForgotPassword';
@@ -18,7 +19,7 @@ const ProtectedRoute = ({ children }) => {
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <Loader className="animate-spin text-indigo-600" size={32} />
+                <Loader className="animate-spin" style={{ color: 'var(--teal)' }} size={32} />
             </div>
         );
     }
@@ -36,11 +37,11 @@ const AppRouter = () => {
             <Routes>
                 {/* Public Routes */}
                 <Route path="/" element={<LandingPage />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<SignUp />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/join/:groupId" element={<JoinPage />} />
+                <Route path="/login" element={<AuthLayout><Login /></AuthLayout>} />
+                <Route path="/signup" element={<AuthLayout><SignUp /></AuthLayout>} />
+                <Route path="/forgot-password" element={<AuthLayout><ForgotPassword /></AuthLayout>} />
+                <Route path="/reset-password" element={<AuthLayout><ResetPassword /></AuthLayout>} />
+                <Route path="/join/:groupId" element={<AuthLayout><JoinPage /></AuthLayout>} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

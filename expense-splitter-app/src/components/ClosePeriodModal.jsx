@@ -54,7 +54,7 @@ const ClosePeriodModal = ({
             onClose();
         } catch (error) {
             console.error('Error closing period:', error);
-            alert('Failed to close period. Please try again.');
+            alert(error.message || 'Failed to close period. Please try again.');
         } finally {
             setIsClosing(false);
         }

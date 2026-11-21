@@ -87,13 +87,14 @@ const ForgotPassword = ({ onBack }) => {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="forgotpassword-email" className="block text-sm font-medium text-gray-700 mb-2">
                             Email Address
                         </label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
                             <input
                                 type="email"
+                                id="forgotpassword-email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"

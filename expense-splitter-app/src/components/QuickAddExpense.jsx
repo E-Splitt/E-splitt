@@ -1,3 +1,4 @@
+import { expenseAllocation } from '../utils/splitLogic';
 import React, { useState, useEffect } from 'react';
 import { Plus, Loader, AlertCircle, Check, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,21 +47,8 @@ const QuickAddExpense = ({ onAdd, participants, currentUserId }) => {
             return;
         }
 
-        const shares = {};
-        if (participants.length > 0) {
-            const amountCents = Math.round(amountFloat * 100);
-            const baseShareCents = Math.floor(amountCents / participants.length);
-            let remainderCents = amountCents % participants.length;
-
-            participants.forEach(p => {
-                let shareCents = baseShareCents;
-                if (remainderCents > 0) {
-                    shareCents += 1;
-                    remainderCents -= 1;
-                }
-                shares[p.id] = shareCents / 100;
-            });
-        }
+        const { computedShares: shares, allocationStatus } = expenseAllocation(amount, participants.map(p => p.id), 'equal', {});
+        if (!allocationStatus.valid) { setError(allocationStatus.text); return; }
 
         const newExpense = {
             id: createExpenseId(),

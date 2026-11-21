@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { allocateCents, expenseAllocation, toCents } from '../utils/splitLogic';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { format } from 'date-fns';
 import { createExpenseId } from '../utils/ids';
 import { X, Loader, Check, Receipt, Wallet, Repeat, Sliders } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,9 +14,11 @@ const SPLIT_MODES = [
     { id: 'shares', label: '1x Shares' },
 ];
 
-const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExpense }) => {
+const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExpense, archivePeriod }) => {
     const isEditing = !!editExpense;
 
+    const [archiveDate, setArchiveDate] = useState('');
+    const archiveExpenseId = useRef(null);
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
     const [paidBy, setPaidBy] = useState('');
@@ -24,6 +28,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     const [customValues, setCustomValues] = useState({});
     const [isRecurring, setIsRecurring] = useState(false);
     const [recurringInterval, setRecurringInterval] = useState('monthly');
+    const [splitChanged, setSplitChanged] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
     const [touched, setTouched] = useState({});
@@ -38,9 +43,12 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             setIsRecurring(!!editExpense.isRecurring);
             setRecurringInterval(editExpense.recurringInterval || 'monthly');
 
-            const shareUserIds = Object.keys(editExpense.shares || {}).filter(id => editExpense.shares[id] > 0);
+            const shareUserIds = Object.keys(editExpense.shares || {});
             setSelectedParticipants(shareUserIds);
-            setCustomValues(editExpense.shares || {});
+            const legacy = editExpense.shares || {};
+            const legacyTotal = Object.values(legacy).reduce((sum, value) => sum + toCents(value), 0);
+            setCustomValues(editExpense.splitInputs ?? (editExpense.splitMode === 'percent'
+                ? Object.fromEntries(shareUserIds.map(id => [id, legacyTotal ? toCents(legacy[id]) * 100 / legacyTotal : 0])) : legacy));
         } else if (isOpen && participants.length > 0) {
             setPaidBy(participants[0].id);
             const uniqueIds = [...new Set(participants.map(p => p.id))];
@@ -58,23 +66,29 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         if (isOpen) {
             setErrors({});
             setTouched({});
+            setSplitChanged(false);
         }
     }, [isOpen]);
 
+    useEffect(() => {
+        if (isOpen && archivePeriod) {
+            setArchiveDate(format(new Date(archivePeriod.end_date || archivePeriod.closed_at || Date.now()), 'yyyy-MM-dd'));
+            archiveExpenseId.current = null;
+        }
+    }, [archivePeriod, isOpen]);
+
     const handleSplitModeChange = (mode) => {
+        setSplitChanged(true);
         setSplitMode(mode);
         const amt = parseFloat(amount) || 0;
-        const count = Math.max(1, selectedParticipants.length);
-        const next = {};
-        selectedParticipants.forEach((id) => {
-            if (mode === 'exact') next[id] = +(amt / count).toFixed(2);
-            else if (mode === 'percent') next[id] = +(100 / count).toFixed(1);
-            else if (mode === 'shares') next[id] = 1;
-        });
+        const next = mode === 'percent' ? allocateCents(10000, selectedParticipants)
+            : mode === 'exact' ? allocateCents(toCents(amt), selectedParticipants)
+            : Object.fromEntries(selectedParticipants.map(id => [id, 1]));
         setCustomValues(next);
     };
 
     const handleCustomValueChange = (userId, rawVal) => {
+        setSplitChanged(true);
         const val = parseFloat(rawVal);
         setCustomValues(prev => ({
             ...prev,
@@ -82,86 +96,9 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
         }));
     };
 
-    const { computedShares, allocationStatus } = useMemo(() => {
-        const shares = {};
-        const amountFloat = parseFloat(amount) || 0;
-        const totalCents = Math.round(amountFloat * 100);
-        const selected = selectedParticipants;
-
-        if (selected.length === 0 || amountFloat <= 0) {
-            return { computedShares: shares, allocationStatus: { valid: true, text: '' } };
-        }
-
-        if (splitMode === 'equal') {
-            const baseShareCents = Math.floor(totalCents / selected.length);
-            let remainderCents = totalCents % selected.length;
-            selected.forEach(userId => {
-                let shareCents = baseShareCents;
-                if (remainderCents > 0) {
-                    shareCents += 1;
-                    remainderCents -= 1;
-                }
-                shares[userId] = shareCents / 100;
-            });
-            return {
-                computedShares: shares,
-                allocationStatus: { valid: true, text: `$${(amountFloat / selected.length).toFixed(2)} / person` }
-            };
-        }
-
-        if (splitMode === 'exact') {
-            let sum = 0;
-            selected.forEach(id => {
-                const v = Math.max(0, parseFloat(customValues[id]) || 0);
-                shares[id] = +v.toFixed(2);
-                sum += shares[id];
-            });
-            const diff = +(amountFloat - sum).toFixed(2);
-            return {
-                computedShares: shares,
-                allocationStatus: {
-                    valid: Math.abs(diff) <= 0.02,
-                    text: Math.abs(diff) <= 0.02
-                        ? 'Exact total matched ✓'
-                        : diff > 0
-                        ? `$${diff.toFixed(2)} left to assign`
-                        : `$${Math.abs(diff).toFixed(2)} over total`
-                }
-            };
-        }
-
-        if (splitMode === 'percent') {
-            let pctSum = 0;
-            selected.forEach(id => {
-                const pct = Math.max(0, parseFloat(customValues[id]) || 0);
-                pctSum += pct;
-                shares[id] = +((amountFloat * pct) / 100).toFixed(2);
-            });
-            const diff = +(100 - pctSum).toFixed(1);
-            return {
-                computedShares: shares,
-                allocationStatus: {
-                    valid: Math.abs(diff) <= 0.5,
-                    text: Math.abs(diff) <= 0.5 ? '100% allocated ✓' : `${pctSum.toFixed(1)}% / 100%`
-                }
-            };
-        }
-
-        // shares mode (1x, 2x, etc.)
-        let totalUnits = 0;
-        selected.forEach(id => {
-            totalUnits += Math.max(0, parseFloat(customValues[id]) || 0);
-        });
-        if (totalUnits <= 0) totalUnits = selected.length;
-        selected.forEach(id => {
-            const units = Math.max(0, parseFloat(customValues[id]) || 0);
-            shares[id] = +((amountFloat * units) / totalUnits).toFixed(2);
-        });
-        return {
-            computedShares: shares,
-            allocationStatus: { valid: true, text: `${totalUnits} total share units` }
-        };
-    }, [amount, selectedParticipants, splitMode, customValues]);
+    const { computedShares, allocationStatus } = useMemo(
+        () => expenseAllocation(amount, selectedParticipants, splitMode, customValues),
+        [amount, selectedParticipants, splitMode, customValues]);
 
     useEffect(() => {
         const newErrors = {};
@@ -177,6 +114,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
     }, [description, amount, selectedParticipants, touched, allocationStatus]);
 
     const handleParticipantToggle = (userId) => {
+        setSplitChanged(true);
         setTouched(prev => ({ ...prev, participants: true }));
         setSelectedParticipants(prev =>
             prev.includes(userId)
@@ -196,15 +134,24 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             return;
         }
 
+        if (archivePeriod && !archiveDate) {
+            setErrors(prev => ({ ...prev, submit: 'Enter the expense date.' }));
+            return;
+        }
+        if (archivePeriod && !archiveExpenseId.current) archiveExpenseId.current = createExpenseId();
+
         const expenseData = {
-            id: editExpense?.id || createExpenseId(),
-            date: editExpense?.date || new Date().toLocaleDateString(),
-            expenseDate: editExpense?.expenseDate || new Date().toISOString().split('T')[0],
+            id: editExpense?.id ?? (archivePeriod ? archiveExpenseId.current : createExpenseId()),
+            date: editExpense?.date || (archivePeriod ? archiveDate : new Date().toLocaleDateString()),
+            expenseDate: editExpense?.expenseDate || (archivePeriod ? archiveDate : new Date().toISOString().split('T')[0]),
             description,
             amount: amountFloat,
             paidBy,
             category: category,
-            shares: computedShares,
+            shares: isEditing && !splitChanged && editExpense.amount === amountFloat &&
+                Object.values(editExpense.shares || {}).reduce((sum, share) => sum + toCents(share), 0) === toCents(amountFloat)
+                ? editExpense.shares : computedShares,
+            splitInputs: Object.fromEntries(selectedParticipants.map(id => [id, customValues[id] ?? 0])),
             splitMode,
             isRecurring,
             recurringInterval: isRecurring ? recurringInterval : null,
@@ -222,7 +169,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
             resetForm();
         } catch (error) {
             console.error('Error saving expense:', error);
-            setErrors(prev => ({ ...prev, submit: 'Failed to save. Please try again.' }));
+            setErrors(prev => ({ ...prev, submit: archivePeriod || editExpense?.periodId ? error.message : 'Failed to save. Please try again.' }));
         } finally {
             setIsSubmitting(false);
         }
@@ -266,7 +213,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                                 <span className="p-2 rounded-xl" style={{ backgroundColor: 'var(--teal-soft)', color: 'var(--teal)' }}>
                                     <Receipt size={18} />
                                 </span>
-                                <span>{isEditing ? 'Edit expense' : 'New expense'}</span>
+                                <span>{isEditing ? 'Edit expense' : archivePeriod ? 'Add archived expense' : 'New expense'}</span>
                             </div>
                             <motion.button className="icon-btn ghost" onClick={onClose} whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.9 }}>
                                 <X size={18} />
@@ -277,6 +224,14 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                             <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">
                                 {errors.submit}
                             </div>
+                        )}
+
+                        {archivePeriod && (
+                            <label className="field-label block mb-3">
+                                Expense date · {archivePeriod.name}
+                                <input type="date" className="field" value={archiveDate}
+                                    onChange={e => setArchiveDate(e.target.value)} />
+                            </label>
                         )}
 
                         <label className="field-label">What was it for?</label>
@@ -473,7 +428,7 @@ const AddExpenseModal = ({ isOpen, onClose, onAdd, onEdit, participants, editExp
                             {isSubmitting ? (
                                 <><Loader size={16} className="animate-spin" /> Saving...</>
                             ) : (
-                                <><Wallet size={16} /> {isEditing ? 'Save Changes' : 'Add to the tab'}</>
+                                <><Wallet size={16} /> {isEditing ? 'Save Changes' : archivePeriod ? 'Add to archive' : 'Add to the tab'}</>
                             )}
                         </motion.button>
                     </motion.div>

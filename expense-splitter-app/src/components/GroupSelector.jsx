@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Plus, X, Check, Edit2, Trash2, Share2, Lock, Unlock, Link as LinkIcon } from 'lucide-react';
+import { Users, Plus, X, Check, Edit2, Trash2, Share2, Lock, Unlock, ChevronDown, Link as LinkIcon } from 'lucide-react';
 import { getUnlockedGroups } from '../utils/crypto';
 
 const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onEditGroup, onDeleteGroup, onShareGroup, onSetPin }) => {
@@ -68,26 +68,20 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                 <div className="relative">
                     <button
                         onClick={() => setShowGroupList(!showGroupList)}
-                        className="group-pill"
+                        className="group-pill" aria-expanded={showGroupList}
                     >
-                        <span className="truncate max-w-[200px]">
-                            {currentGroupObj ? (
-                                <>
-                                    {currentGroupObj.pinEnabled && (
-                                        <span className="mr-1">{getUnlockedGroups().includes(currentGroupObj.id) ? '🔓' : '🔒'}</span>
-                                    )}
-                                    {currentGroupObj.name}
-                                </>
-                            ) : 'Select Group'}
-                        </span>
-                        <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>▼</span>
+                        {currentGroupObj?.pinEnabled && (
+                            getUnlockedGroups().includes(currentGroupObj.id) ? <Unlock size={13} /> : <Lock size={13} />
+                        )}
+                        <span className="truncate max-w-[200px]">{currentGroupObj?.name || 'Create or join a group'}</span>
+                        <ChevronDown size={14} aria-hidden="true" />
                     </button>
 
                     {/* Custom Dropdown List */}
                     {showGroupList && (
                         <>
                             <div className="fixed inset-0 z-10" onClick={() => setShowGroupList(false)} />
-                            <div className="absolute top-full left-0 mt-1 w-[280px] rounded-lg shadow-xl z-20 max-h-64 overflow-y-auto themed-card">
+                            <div className="group-menu absolute top-full left-0 mt-1 rounded-lg z-20 max-h-64 overflow-y-auto themed-card">
                                 {groups.map(group => {
                                     const unlockedGroups = getUnlockedGroups();
                                     const isUnlocked = unlockedGroups.includes(group.id);
@@ -122,17 +116,17 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                 <div className="border-t border-themed p-2 flex gap-1">
                                     <button
                                         onClick={() => { setIsCreating(true); setShowGroupList(false); }}
-                                        className="flex-1 p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center justify-center"
+                                        className="mini-btn flex-1"
                                         title="Create new group"
                                     >
-                                        <Plus size={18} />
+                                        <Plus size={15} /> Create
                                     </button>
                                     <button
                                         onClick={() => { setIsJoining(true); setShowGroupList(false); }}
-                                        className="flex-1 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors flex items-center justify-center"
+                                        className="mini-btn flex-1"
                                         title="Join group via link"
                                     >
-                                        <LinkIcon size={18} />
+                                        <LinkIcon size={15} /> Join
                                     </button>
                                 </div>
                             </div>
@@ -144,7 +138,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                     onClick={() => setShowMenu(!showMenu)}
                     className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
                     style={{ color: 'var(--text-secondary)' }}
-                    title="Group options"
+                    title="Group options" aria-expanded={showMenu} disabled={!currentGroupObj}
                 >
                     <Edit2 size={16} />
                 </button>

@@ -4,6 +4,55 @@ export const toCents = (amount) => Math.round(Number(amount) * 100);
 // Convert integer cents to dollars (float)
 export const toDollars = (cents) => cents / 100;
 
+// Allocate indivisible cents by largest remainder, preserving participant order on ties.
+export function allocateCents(cents, ids, weights = {}) {
+    const rows = ids.map(id => ({ id, weight: Number(weights[id] ?? 1) }));
+    const total = rows.reduce((sum, row) => sum + row.weight, 0);
+    if (!Number.isSafeInteger(cents) || cents < 0 || !Number.isFinite(total) || total <= 0 ||
+        rows.some(row => row.weight < 0)) return {};
+    // Convert finite decimal weights (including scientific notation) to a common integer scale.
+    const parts = rows.map(row => {
+        const [mantissa, exponent = '0'] = String(row.weight).toLowerCase().split('e');
+        const [whole, fraction = ''] = mantissa.split('.');
+        return { digits: BigInt(whole + fraction), scale: fraction.length - Number(exponent) };
+    });
+    const scale = Math.max(...parts.map(part => part.scale));
+    const units = parts.map(part => part.digits * 10n ** BigInt(scale - part.scale));
+    const denominator = units.reduce((sum, value) => sum + value, 0n);
+    let remaining = cents;
+    rows.forEach((row, index) => {
+        const numerator = BigInt(cents) * units[index];
+        row.cents = Number(numerator / denominator);
+        row.remainder = numerator % denominator;
+        remaining -= row.cents;
+    });
+    const ranked = [...rows].sort((a, b) => Number(b.remainder - a.remainder));
+    for (let i = 0; i < remaining; i++) ranked[i].cents++;
+    return Object.fromEntries(rows.map(row => [row.id, toDollars(row.cents)]));
+}
+
+export function expenseAllocation(amount, ids, mode, values) {
+    const cents = toCents(amount);
+    const invalid = text => ({ computedShares: {}, allocationStatus: { valid: false, text } });
+    if (!Number.isSafeInteger(cents) || cents <= 0 || Number(amount) !== cents / 100 || !ids.length)
+        return invalid('Enter a positive amount in cents and select people');
+    const weights = Object.fromEntries(ids.map(id => [id, Number(values[id] || 0)]));
+    if (Object.values(weights).some(v => !Number.isFinite(v) || v < 0)) return invalid('Enter valid shares');
+    let shares;
+    if (mode === 'exact') {
+        if (Object.values(weights).some(v => toCents(v) / 100 !== v)) return invalid('Use at most two decimal places');
+        const diff = cents - Object.values(weights).reduce((sum,v) => sum + toCents(v), 0);
+        if (diff) return invalid(`$${(Math.abs(diff)/100).toFixed(2)} ${diff > 0 ? 'left to assign' : 'over total'}`);
+        shares = weights;
+    } else {
+        const total = Object.values(weights).reduce((sum,v) => sum + v, 0);
+        if (mode === 'percent' && Math.abs(total - 100) > 1e-8) return invalid('Percentages must total 100%');
+        shares = allocateCents(cents, ids, mode === 'equal' ? {} : weights);
+        if (!Object.keys(shares).length) return invalid('Enter positive share units');
+    }
+    return { computedShares: shares, allocationStatus: { valid: true, text: 'Fully allocated' } };
+}
+
 // Calculate balances from expenses
 export const calculateBalances = (expenses, participants) => {
     const balancesCents = {};
