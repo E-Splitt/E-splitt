@@ -57,10 +57,8 @@ const ShareGroupModal = ({ isOpen, onClose, groupData }) => {
                             </div>
                             <button
                                 onClick={handleCopyLink}
-                                className={`px-4 py-3 rounded-lg font-medium flex items-center gap-2 transition-all shadow-sm ${copied
-                                    ? 'bg-green-600 text-white hover:bg-green-700'
-                                    : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-md'
-                                    }`}
+                                className="btn btn--primary px-4 py-3 font-medium flex items-center gap-2 transition-all shadow-sm"
+                                style={{ background: copied ? 'var(--good)' : 'var(--accent)', color: 'var(--on-fill)' }}
                             >
                                 {copied ? <Check size={18} /> : <Copy size={18} />}
                                 {copied ? 'Copied' : 'Copy'}

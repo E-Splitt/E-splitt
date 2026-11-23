@@ -53,7 +53,7 @@ const PeriodSelector = ({
                     />
 
                     {/* Dropdown */}
-                    <div className="absolute top-full left-0 mt-2 w-full rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto themed-card">
+                    <div className="absolute top-full left-0 mt-2 min-w-[280px] rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto themed-card">
                         {/* Active Period Section */}
                         <div className="p-2" style={{ borderBottom: '1px solid var(--border-secondary)' }}>
                             <div className="text-xs font-semibold uppercase px-2 py-1" style={{ color: 'var(--text-muted)' }}>
@@ -80,7 +80,7 @@ const PeriodSelector = ({
                                         </div>
                                     </div>
                                     {currentPeriod === period.id && (
-                                        <Check size={16} style={{ color: 'var(--accent-indigo)' }} />
+                                        <Check size={16} style={{ color: 'var(--accent-text)' }} />
                                     )}
                                 </button>
                             ))}
@@ -95,7 +95,7 @@ const PeriodSelector = ({
                                         setIsOpen(false);
                                     }}
                                     className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                                    style={{ color: 'var(--accent-indigo)' }}
+                                    style={{ color: 'var(--accent-text)' }}
                                 >
                                     <Plus size={16} />
                                     Start new period

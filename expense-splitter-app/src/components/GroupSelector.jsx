@@ -80,8 +80,8 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                     {/* Custom Dropdown List */}
                     {showGroupList && (
                         <>
-                            <div className="fixed inset-0 z-10" onClick={() => setShowGroupList(false)} />
-                            <div className="group-menu absolute top-full left-0 mt-1 rounded-lg z-20 max-h-64 overflow-y-auto themed-card">
+                            <div className="fixed inset-0 z-20" onClick={() => setShowGroupList(false)} />
+                            <div className="group-menu absolute top-full left-0 mt-1 min-w-[260px] rounded-lg z-30 max-h-64 overflow-y-auto themed-card">
                                 {groups.map(group => {
                                     const unlockedGroups = getUnlockedGroups();
                                     const isUnlocked = unlockedGroups.includes(group.id);
@@ -97,7 +97,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                                                 setShowGroupList(false);
                                             }}
                                             className={`w-full text-left px-4 py-3 text-sm transition-colors flex items-center gap-2 ${isSelected ? 'font-medium' : ''}`}
-                                            style={{ color: isSelected ? 'var(--accent-indigo)' : 'var(--text-primary)', backgroundColor: isSelected ? 'var(--bg-card-hover)' : 'transparent' }}
+                                            style={{ color: isSelected ? 'var(--accent-text)' : 'var(--text-primary)', backgroundColor: isSelected ? 'var(--bg-card-hover)' : 'transparent' }}
                                             onMouseEnter={(e) => e.target.style.backgroundColor = 'var(--bg-card-hover)'}
                                             onMouseLeave={(e) => { if (!isSelected) e.target.style.backgroundColor = 'transparent'; }}
                                         >
@@ -236,7 +236,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                         <div className="flex gap-2 mt-4">
                             <button
                                 onClick={handleCreate}
-                                className="flex-1 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm"
+                                className="btn btn--primary flex-1 p-2 font-medium text-sm justify-center"
                             >
                                 Create
                             </button>
@@ -259,11 +259,11 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
             {/* Join Group Modal */}
             {isJoining && (
                 <>
-                    <div className="fixed inset-0 z-10" onClick={() => {
+                    <div className="fixed inset-0 z-20" onClick={() => {
                         setIsJoining(false);
                         setJoinLink('');
                     }} />
-                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg p-4 z-20 w-80 themed-card">
+                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg p-4 z-30 w-80 themed-card">
                         <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>Join Group</h3>
                         <div className="space-y-3">
                             <div>
@@ -283,7 +283,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                         <div className="flex gap-2 mt-4">
                             <button
                                 onClick={handleJoin}
-                                className="flex-1 p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm"
+                                className="btn btn--primary flex-1 p-2 font-medium text-sm justify-center"
                             >
                                 Join
                             </button>
@@ -305,11 +305,11 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
             {/* Edit Group Modal */}
             {isEditing && (
                 <>
-                    <div className="fixed inset-0 z-10" onClick={() => {
+                    <div className="fixed inset-0 z-20" onClick={() => {
                         setIsEditing(false);
                         setEditGroupName('');
                     }} />
-                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg p-3 z-20 w-64 themed-card">
+                    <div className="absolute top-full left-0 mt-2 rounded-lg shadow-lg p-3 z-30 w-64 themed-card">
                         <div className="flex items-center gap-2">
                             <input
                                 type="text"
@@ -322,7 +322,7 @@ const GroupSelector = ({ groups, currentGroup, onSelectGroup, onCreateGroup, onE
                             />
                             <button
                                 onClick={handleEdit}
-                                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                                className="p-2 btn btn--primary"
                             >
                                 <Check size={16} />
                             </button>

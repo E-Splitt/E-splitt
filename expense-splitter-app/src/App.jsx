@@ -35,7 +35,8 @@ const Analytics = lazy(() => import('./components/Analytics'));
 import {
   Menu, X, LogOut, Moon, Sun, Shield, Share2,
   Plus, Settings, Receipt, TrendingUp, Users,
-  MessageSquare, Activity, Lock, Check, Edit2, BarChart3, Clock, Calendar
+  MessageSquare, Activity, Lock, Check, Edit2, BarChart3, Clock, Calendar,
+  Home, Search, ArrowRight, ChevronRight, ChevronDown
 } from 'lucide-react';
 
 // Services
@@ -726,74 +727,164 @@ function App() {
   if (!user) return <AuthPage />;
 
   const nav = [
-    { key: 'dashboard', icon: TrendingUp, label: 'Overview' },
-    { key: 'participants', icon: Users, label: 'People' },
+    { key: 'dashboard', icon: Home, label: 'Overview' },
+    { key: 'expenses', icon: Receipt, label: 'Expenses' },
+    { key: 'analytics', icon: BarChart3, label: 'Insights' },
+    { key: 'participants', icon: Users, label: 'Members' },
+    { key: 'archive', icon: Calendar, label: 'Periods' },
     { key: 'activity', icon: Clock, label: 'Activity' },
     { key: 'chat', icon: MessageSquare, label: 'Chat' },
-    { key: 'analytics', icon: BarChart3, label: 'Spending' },
-    { key: 'archive', icon: Calendar, label: 'Archive' },
   ];
+
+  const currentGroupName = groups.find(g => g.id === currentGroupId)?.name || 'Household';
+  const currentTotalSpend = periodExpenses.reduce((s, e) => s + (e.isSettlement ? 0 : Number(e.amount) || 0), 0);
 
   return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="shell">
-        {/* ---------- desktop side ledger ---------- */}
-        <aside className="side">
-          <div className="side-brand">
-            <ESplitLogo size={35} />
-            <div className="side-title">E-Split</div>
+        {/* ---------- Verdin desktop side ledger ---------- */}
+        <aside className="side" aria-label="Sidebar">
+          <div className="side__head">
+            <div className="brand">
+              <span className="mark">
+                <ESplitLogo size={22} />
+              </span>
+              <span className="brand__text">
+                <b>E-Split</b>
+                <small>{currentGroupName}</small>
+              </span>
+            </div>
           </div>
-          <nav className="side-nav" aria-label="Household navigation">
-            {nav.map((n) => {
-              const isActive = activeTab === n.key;
-              return (
-                <motion.button
-                  key={n.key}
-                  whileTap={{ scale: 0.97 }}
-                  className={`side-tab ${isActive ? "active" : ""}`} aria-current={isActive ? 'page' : undefined}
-                  onClick={() => handleTabChange(n.key)}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeSideTabPill"
-                      className="side-tab-pill"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                  <n.icon size={17} />
-                  <span>{n.label}</span>
-                </motion.button>
-              );
-            })}
+
+          <button
+            type="button"
+            className="side__search"
+            onClick={() => setIsCommandPaletteOpen(true)}
+            aria-label="Search"
+            title="Search / Command Palette (⌘K)"
+          >
+            <Search size={16} />
+            <span>Search payments…</span>
+            <span className="kbd">⌘K</span>
+          </button>
+
+          <nav className="snav" aria-label="Main">
+            <div className="snav__group">
+              <span className="side__group">Money</span>
+              <button
+                type="button"
+                className={`snav__item ${activeTab === 'dashboard' ? 'active' : ''}`}
+                aria-current={activeTab === 'dashboard' ? 'page' : undefined}
+                onClick={() => handleTabChange('dashboard')}
+              >
+                <Home size={18} />
+                <span className="snav__label">Overview</span>
+              </button>
+              <button
+                type="button"
+                className={`snav__item ${activeTab === 'analytics' ? 'active' : ''}`}
+                aria-current={activeTab === 'analytics' ? 'page' : undefined}
+                onClick={() => handleTabChange('analytics')}
+              >
+                <BarChart3 size={18} />
+                <span className="snav__label">Insights</span>
+              </button>
+            </div>
+
+            <div className="snav__group">
+              <span className="side__group">Household</span>
+              <button
+                type="button"
+                className={`snav__item ${activeTab === 'participants' ? 'active' : ''}`}
+                aria-current={activeTab === 'participants' ? 'page' : undefined}
+                onClick={() => handleTabChange('participants')}
+              >
+                <Users size={18} />
+                <span className="snav__label">Members</span>
+                {participants.length > 0 && <span className="snav__count">{participants.length}</span>}
+              </button>
+              <button
+                type="button"
+                className={`snav__item ${activeTab === 'archive' ? 'active' : ''}`}
+                aria-current={activeTab === 'archive' ? 'page' : undefined}
+                onClick={() => handleTabChange('archive')}
+              >
+                <Calendar size={18} />
+                <span className="snav__label">Periods</span>
+              </button>
+              <button
+                type="button"
+                className={`snav__item ${activeTab === 'activity' ? 'active' : ''}`}
+                aria-current={activeTab === 'activity' ? 'page' : undefined}
+                onClick={() => handleTabChange('activity')}
+              >
+                <Clock size={18} />
+                <span className="snav__label">Activity</span>
+              </button>
+              <button
+                type="button"
+                className={`snav__item ${activeTab === 'chat' ? 'active' : ''}`}
+                aria-current={activeTab === 'chat' ? 'page' : undefined}
+                onClick={() => handleTabChange('chat')}
+              >
+                <MessageSquare size={18} />
+                <span className="snav__label">Chat</span>
+              </button>
+            </div>
           </nav>
 
-          <div className="pt-4 mt-4 border-t" style={{ borderColor: 'var(--line)' }}>
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.97 }}
-              className="theme-btn"
-              onClick={() => setDarkMode((d) => !d)}
-            >
-              {darkMode ? <Sun size={15} /> : <Moon size={15} />}
-              <span>{darkMode ? 'Light theme' : 'Dark theme'}</span>
-            </motion.button>
+          <div className="side__foot">
+            {currentGroupId && (
+              <div className="side__bal" onClick={() => handleTabChange('dashboard')} title="View period overview">
+                <div className="side__bal-row">
+                  <div className="side__bal-text">
+                    <small>Period Spend</small>
+                    <span>${currentTotalSpend.toFixed(2)}</span>
+                  </div>
+                  <div className="side__bal-text" style={{ textAlign: 'right' }}>
+                    <small>{currentPeriod?.name || 'Current'}</small>
+                  </div>
+                </div>
+                <span className="meter is-lime" role="meter" aria-label="Period spend meter">
+                  <i style={{ transform: 'scaleX(0.85)' }} />
+                </span>
+              </div>
+            )}
+
+            <button type="button" className="side__me" onClick={() => setIsCommandPaletteOpen(true)} title="Account Details">
+              <span className="av av--payee" aria-hidden="true" style={{ background: 'var(--lime)', color: '#141414' }}>
+                {user?.email ? user.email.slice(0, 2).toUpperCase() : 'ME'}
+              </span>
+              <span className="cell__text">
+                <b>{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'My Account'}</b>
+                <small>{currentUserRole === 'admin' ? 'Household Admin' : 'Household Member'}</small>
+              </span>
+              <ChevronDown size={14} style={{ color: 'var(--muted)' }} />
+            </button>
           </div>
         </aside>
 
-        {/* ---------- main column ---------- */}
+        {/* ---------- Verdin main column ---------- */}
         <div className="main">
-          <header className="topbar">
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              className="icon-btn only-mobile" aria-label="Menu" aria-expanded={isMobileMenuOpen}
-              onClick={() => setIsMobileMenuOpen((v) => !v)}
-            >
-              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </motion.button>
-            
-            <div className="topbar-center">
-              <div>
-                <span className="crumb">Group</span>
+          <header className="top">
+            <div className="top__in">
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                className="ibtn ibtn--flat only-mobile"
+                aria-label="Menu"
+                aria-expanded={isMobileMenuOpen}
+                onClick={() => setIsMobileMenuOpen((v) => !v)}
+              >
+                {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              </motion.button>
+              
+              <div className="crumbs">
+                <span>{currentGroupName}</span>
+                <ChevronRight size={14} style={{ color: 'var(--muted)' }} />
+                <b>{nav.find(n => n.key === activeTab)?.label || 'Overview'}</b>
+              </div>
+
+              <div className="topbar-center" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <GroupSelector
                   groups={groups}
                   currentGroup={currentGroupId}
@@ -804,61 +895,48 @@ function App() {
                   onShareGroup={handleShareGroup}
                   onSetPin={handleSetPin}
                 />
-              </div>
-              
-              {currentGroupId && (
-                <div className="topbar-period">
-                  <span className="crumb">Period</span>
+                
+                {currentGroupId && (
                   <PeriodSelector
                     periods={periods}
                     currentPeriod={currentPeriodId}
                     onSelectPeriod={setCurrentPeriodId}
                     onCreatePeriod={currentPeriod?.status === 'active' ? () => setIsClosePeriodModalOpen(true) : undefined}
                   />
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="only-desktop flex items-center gap-1.5 mr-1">
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => setIsCommandPaletteOpen(true)}
-                  className="px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 cursor-pointer"
-                  style={{ borderColor: 'var(--line)', backgroundColor: 'var(--page)', color: 'var(--muted)' }}
-                  title="Open Command Palette (⌘K)"
-                >
-                  <span>Search / Commands</span>
-                  <span className="mono text-[10px] px-1.5 py-0.5 rounded border" style={{ borderColor: 'var(--line)' }}>⌘K</span>
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.08, rotate: 12 }}
-                  whileTap={{ scale: 0.92 }}
-                  className="icon-btn ghost"
-                  onClick={() => setDarkMode((d) => !d)}
-                  title="Toggle Theme"
-                >
-                  {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.08 }}
-                  whileTap={{ scale: 0.92 }}
-                  onClick={signOut}
-                  className="icon-btn ghost text-red-500 hover:bg-red-50"
-                  title="Logout"
-                >
-                  <LogOut size={18} />
-                </motion.button>
+                )}
               </div>
-              <motion.button
-                whileHover={{ scale: 1.03, y: -1 }}
-                whileTap={{ scale: 0.96 }}
-                className="add-btn" aria-label="Add expense"
-                disabled={archived || !currentGroupId} onClick={() => setIsExpenseModalOpen(true)}
-              >
-                <Plus size={17} /> <span className="only-desktop">Add expense</span>
-              </motion.button>
+
+              <div className="tools">
+                <button
+                  type="button"
+                  className="ibtn"
+                  onClick={() => setDarkMode((d) => !d)}
+                  title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                  {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+                </button>
+
+                <button
+                  type="button"
+                  className="ibtn"
+                  onClick={signOut}
+                  title="Logout"
+                  style={{ color: 'var(--bad)' }}
+                >
+                  <LogOut size={17} />
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  aria-label="Add expense"
+                  disabled={archived || !currentGroupId}
+                  onClick={() => setIsExpenseModalOpen(true)}
+                >
+                  <Plus size={16} />
+                  <span className="only-desktop">Add expense</span>
+                </button>
+              </div>
             </div>
           </header>
 
@@ -911,32 +989,20 @@ function App() {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ type: 'spring', stiffness: 320, damping: 28 }}
                   >
-                    <div className="mb-8">
-                      <div className="workspace-heading">
-                        <div>
-                          <div className="workspace-period"><Calendar size={14} /> {archived ? 'Archived period' : 'Current period'}{currentPeriod?.name ? ` · ${currentPeriod.name}` : ''}</div>
-                          <h1>{groups.find(group => group.id === currentGroupId)?.name || 'Your household'}</h1>
-                        </div>
-                        <div className="workspace-heading-actions">
-                          <ExportButton expenses={periodExpenses} participants={participants} />
-                          <motion.button
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.96 }}
-                            disabled={currentPeriod?.status !== 'active'} onClick={() => setIsClosePeriodModalOpen(true)}
-                            className="secondary-button"
-                          >
-                            <Calendar size={15} />
-                            Close period
-                          </motion.button>
-                        </div>
+                    <div className="mb-6">
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                        <ExportButton expenses={periodExpenses} participants={participants} />
                       </div>
-
                       <Dashboard
                         balances={balances}
                         participants={participants}
                         currentUserId={currentParticipantId}
                         expenses={periodExpenses}
-                        onSettle={archived ? undefined : (fromId, toId, amt) => handleOpenSettleModal({ fromId, toId, amount: amt })}
+                        onSettle={archived ? undefined : (fromId, toId, amt) => handleOpenSettleModal(fromId ? { fromId, toId, amount: amt } : null)}
+                        onAddExpense={archived ? undefined : () => setIsExpenseModalOpen(true)}
+                        onClosePeriod={archived || currentPeriod?.status !== 'active' ? undefined : () => setIsClosePeriodModalOpen(true)}
+                        groupName={groups.find(group => group.id === currentGroupId)?.name || 'Your household'}
+                        periodName={currentPeriod?.name ? `${currentPeriod.name}` : (archived ? 'Archived period' : 'Current period')}
                       />
                     </div>
 
@@ -1202,6 +1268,49 @@ function App() {
         editExpense={editExpense}
         archivePeriod={archiveAddPeriod}
       />
+      <nav className="tabbar" aria-label="Quick Navigation">
+        <button
+          type="button"
+          className={activeTab === 'dashboard' ? 'active' : ''}
+          onClick={() => handleTabChange('dashboard')}
+        >
+          <Home size={20} />
+          <span>Home</span>
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'expenses' ? 'active' : ''}
+          onClick={() => handleTabChange('expenses')}
+        >
+          <Receipt size={20} />
+          <span>Expenses</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsExpenseModalOpen(true)}
+          style={{ color: 'var(--accent)' }}
+          title="Add Expense"
+        >
+          <Plus size={22} />
+          <span>Add</span>
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'participants' ? 'active' : ''}
+          onClick={() => handleTabChange('participants')}
+        >
+          <Users size={20} />
+          <span>Members</span>
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'analytics' ? 'active' : ''}
+          onClick={() => handleTabChange('analytics')}
+        >
+          <BarChart3 size={20} />
+          <span>Insights</span>
+        </button>
+      </nav>
     </div>
   );
 }
