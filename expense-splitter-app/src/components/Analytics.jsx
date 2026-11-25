@@ -77,7 +77,7 @@ const Analytics = ({ expenses, participants }) => {
     }, [actualExpenses, participants]);
 
     // Colors for charts
-    const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444'];
+    const COLORS = ['#2f795e', '#b36650', '#bb904b', '#5c7095', '#698c65', '#796b87', '#9e6854'];
 
     if (actualExpenses.length === 0) {
         return (
@@ -104,42 +104,42 @@ const Analytics = ({ expenses, participants }) => {
         <div className="space-y-6">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
+                <div className="archive-stat">
                     <div className="flex items-center justify-between mb-2">
                         <DollarSign size={24} />
-                        <span className="text-indigo-200 text-sm">Total</span>
+                        <span className="stat-label text-sm">Total</span>
                     </div>
-                    <div className="text-3xl font-bold">${totalSpending.toFixed(2)}</div>
-                    <div className="text-indigo-200 text-sm mt-1">All time spending</div>
+                    <div className="text-3xl stat-value">${totalSpending.toFixed(2)}</div>
+                    <div className="stat-label text-sm mt-1">All time spending</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
+                <div className="archive-stat">
                     <div className="flex items-center justify-between mb-2">
                         <Calendar size={24} />
-                        <span className="text-purple-200 text-sm">Expenses</span>
+                        <span className="stat-label text-sm">Expenses</span>
                     </div>
-                    <div className="text-3xl font-bold">{actualExpenses.length}</div>
-                    <div className="text-purple-200 text-sm mt-1">Total transactions</div>
+                    <div className="text-3xl stat-value">{actualExpenses.length}</div>
+                    <div className="stat-label text-sm mt-1">Total transactions</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-pink-500 to-pink-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
+                <div className="archive-stat">
                     <div className="flex items-center justify-between mb-2">
                         <TrendingUp size={24} />
-                        <span className="text-pink-200 text-sm">Average</span>
+                        <span className="stat-label text-sm">Average</span>
                     </div>
-                    <div className="text-3xl font-bold">
+                    <div className="text-3xl stat-value">
                         ${(totalSpending / actualExpenses.length).toFixed(2)}
                     </div>
-                    <div className="text-pink-200 text-sm mt-1">Per expense</div>
+                    <div className="stat-label text-sm mt-1">Per expense</div>
                 </div>
 
-                <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-6 rounded-xl shadow-lg hover:scale-[1.02] transition-transform">
+                <div className="archive-stat">
                     <div className="flex items-center justify-between mb-2">
                         <Users size={24} />
-                        <span className="text-amber-200 text-sm">Categories</span>
+                        <span className="stat-label text-sm">Categories</span>
                     </div>
-                    <div className="text-3xl font-bold">{categoryData.length}</div>
-                    <div className="text-amber-200 text-sm mt-1">Different types</div>
+                    <div className="text-3xl stat-value">{categoryData.length}</div>
+                    <div className="stat-label text-sm mt-1">Different types</div>
                 </div>
             </div>
 
@@ -164,9 +164,9 @@ const Analytics = ({ expenses, participants }) => {
                                 <Line
                                     type="monotone"
                                     dataKey="amount"
-                                    stroke="#6366f1"
+                                    stroke="var(--teal)"
                                     strokeWidth={3}
-                                    dot={{ fill: '#6366f1', r: 4 }}
+                                    dot={{ fill: 'var(--teal)', r: 4 }}
                                     activeDot={{ r: 6 }}
                                 />
                             </LineChart>

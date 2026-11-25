@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createExpenseId } from '../utils/ids';
 
 const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => {
+    const [saving, setSaving] = useState(false);
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [amount, setAmount] = useState('');
@@ -45,8 +46,9 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
     const parsedAmt = parseFloat(amount) || 0;
     const memoText = encodeURIComponent(note || `E-Split settlement to ${toPerson?.name || 'group'}`);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        if (saving) return;
 
         const amountFloat = parseFloat(amount);
         if (!from || !to) {
@@ -57,7 +59,7 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
             setError('Payer and receiver must be different people');
             return;
         }
-        if (isNaN(amountFloat) || amountFloat <= 0) {
+        if (!Number.isSafeInteger(Math.round(amountFloat * 100)) || Math.round(amountFloat * 100) / 100 !== amountFloat || amountFloat <= 0) {
             setError('Enter a valid amount');
             return;
         }
@@ -76,9 +78,14 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
             isSettlement: true
         };
 
-        onSettle(settlement);
-        resetForm();
-        onClose();
+        setSaving(true);
+        try {
+            await onSettle(settlement);
+            resetForm();
+            onClose();
+        } catch {
+            setError('Could not save payment. Please try again.');
+        } finally { setSaving(false); }
     };
 
     const resetForm = () => {
@@ -309,7 +316,7 @@ const SettleUpModal = ({ isOpen, onClose, onSettle, participants, prefill }) => 
                                 <motion.button
                                     whileHover={{ scale: 1.01 }}
                                     whileTap={{ scale: 0.98 }}
-                                    type="submit"
+                                    type="submit" disabled={saving}
                                     className="w-full py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-2 cursor-pointer border-none"
                                     style={{ background: 'linear-gradient(135deg, #059669, #10B981)', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)' }}
                                 >

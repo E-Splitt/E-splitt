@@ -53,9 +53,9 @@ const Login = () => {
                         <LogIn size={32} style={{ color: 'var(--teal)' }} />
                     </div>
                     <h1 className="text-3xl font-bold" style={{ color: 'var(--ink)', fontFamily: 'Space Grotesk, sans-serif' }}>
-                        E-Split
+                        Sign in
                     </h1>
-                    <p className="mt-2" style={{ color: 'var(--muted)' }}>Welcome back! Sign in to continue</p>
+                    <p className="mt-2" style={{ color: 'var(--muted)' }}>Open your household ledger.</p>
                 </div>
 
                 {/* Error Message */}
@@ -70,13 +70,14 @@ const Login = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Email */}
                     <div>
-                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        <label htmlFor="login-email" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Email
                         </label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="email"
+                                id="login-email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
@@ -88,13 +89,14 @@ const Login = () => {
 
                     {/* Password */}
                     <div>
-                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        <label htmlFor="login-password" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Password
                         </label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="password"
+                                id="login-password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"

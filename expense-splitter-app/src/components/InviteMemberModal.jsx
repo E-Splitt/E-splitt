@@ -108,10 +108,8 @@ const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName, groupId }) =>
                             />
                             <button
                                 onClick={handleCopyLink}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors ${linkCopied
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                                    }`}
+                                className="btn btn--primary px-4 py-2 text-sm font-medium flex items-center gap-2"
+                                style={{ background: linkCopied ? 'var(--good)' : 'var(--accent)', color: 'var(--on-fill)' }}
                             >
                                 {linkCopied ? <Check size={16} /> : <Copy size={16} />}
                                 {linkCopied ? 'Copied' : 'Copy'}
@@ -155,7 +153,7 @@ const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName, groupId }) =>
                             <button
                                 onClick={handleSearch}
                                 disabled={isSearching || !email.trim()}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+                                className="btn btn--primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                                 {isSearching ? (
                                     <Loader size={18} className="animate-spin" />
@@ -246,7 +244,7 @@ const InviteMemberModal = ({ isOpen, onClose, onInvite, groupName, groupId }) =>
                     <button
                         onClick={handleInvite}
                         disabled={!selectedUser || isInviting}
-                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors text-sm font-medium"
+                        className="btn btn--primary px-6 py-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
                     >
                         {isInviting ? (
                             <>

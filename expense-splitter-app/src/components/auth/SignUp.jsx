@@ -109,13 +109,14 @@ const SignUp = () => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     {/* Name */}
                     <div>
-                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        <label htmlFor="signup-name" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Name
                         </label>
                         <div className="relative">
                             <User className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="text"
+                                id="signup-name"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
@@ -127,13 +128,14 @@ const SignUp = () => {
 
                     {/* Email */}
                     <div>
-                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        <label htmlFor="signup-email" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Email
                         </label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="email"
+                                id="signup-email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
@@ -145,13 +147,14 @@ const SignUp = () => {
 
                     {/* Password */}
                     <div>
-                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        <label htmlFor="signup-password" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Password
                         </label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="password"
+                                id="signup-password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"
@@ -165,13 +168,14 @@ const SignUp = () => {
 
                     {/* Confirm Password */}
                     <div>
-                        <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        <label htmlFor="signup-confirmPassword" className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                             Confirm Password
                         </label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-3.5 opacity-50" size={18} style={{ color: 'var(--ink)' }} />
                             <input
                                 type="password"
+                                id="signup-confirmPassword"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 className="themed-input w-full pl-10 pr-4 py-3 rounded-lg"

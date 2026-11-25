@@ -217,13 +217,13 @@ const ParticipantManager = ({
                                 )}
 
                                 {emailCheckResult === 'registered' && !isCheckingEmail && (
-                                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                                    <div className="mt-2 p-2 rounded text-xs" style={{ background: 'var(--good-soft)', border: '1px solid var(--good)' }}>
                                         <div className="flex items-start gap-2">
                                             <div className="flex-1">
-                                                <p className="text-green-800 font-medium">
+                                                <p className="font-semibold" style={{ color: 'var(--good)' }}>
                                                     User found: {foundUser?.name}
                                                 </p>
-                                                <p className="text-green-700 mt-1">
+                                                <p className="mt-1" style={{ color: 'var(--ink)' }}>
                                                     This email is registered. Click "Add" to add them to the group.
                                                 </p>
                                             </div>
@@ -246,7 +246,7 @@ const ParticipantManager = ({
                             <div className="flex gap-2">
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="btn btn--primary px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Add as Participant
                                 </button>

@@ -54,7 +54,7 @@ const ClosePeriodModal = ({
             onClose();
         } catch (error) {
             console.error('Error closing period:', error);
-            alert('Failed to close period. Please try again.');
+            alert(error.message || 'Failed to close period. Please try again.');
         } finally {
             setIsClosing(false);
         }
@@ -63,6 +63,13 @@ const ClosePeriodModal = ({
     const getParticipantName = (userId) => {
         const participant = participants.find(p => p.id === userId);
         return participant?.name || 'Unknown';
+    };
+
+    const resolveName = (personOrId) => {
+        if (!personOrId) return 'Unknown';
+        if (typeof personOrId === 'object' && personOrId.name) return personOrId.name;
+        const id = typeof personOrId === 'object' ? personOrId.id : personOrId;
+        return getParticipantName(id);
     };
 
     const hasOutstandingBalances = settlements.length > 0;
@@ -86,11 +93,11 @@ const ClosePeriodModal = ({
                 <div className="p-6 space-y-6">
                     {/* Warning if balances exist */}
                     {hasOutstandingBalances && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex gap-3">
-                            <AlertCircle className="text-yellow-600 flex-shrink-0" size={20} />
+                        <div className="rounded-lg p-4 flex gap-3" style={{ background: 'var(--warn-soft)', border: '1px solid var(--warn)' }}>
+                            <AlertCircle className="flex-shrink-0" size={20} style={{ color: 'var(--warn)' }} />
                             <div>
-                                <p className="text-sm font-medium text-yellow-900">Outstanding Balances</p>
-                                <p className="text-sm text-yellow-700 mt-1">
+                                <p className="text-sm font-semibold" style={{ color: 'var(--warn)' }}>Outstanding Balances</p>
+                                <p className="text-sm mt-1" style={{ color: 'var(--ink)' }}>
                                     There are unsettled balances in this period. Closing will save these balances for reference, but they won't carry over to the next period.
                                 </p>
                             </div>
@@ -148,11 +155,11 @@ const ClosePeriodModal = ({
                                 {settlements.map((settlement, index) => (
                                     <div key={index} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ backgroundColor: 'var(--bg-card-hover)', border: '1px solid var(--border-secondary)' }}>
                                         <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                                            <span className="font-medium">{settlement.from.name}</span>
+                                            <span className="font-medium">{resolveName(settlement.from)}</span>
                                             {' pays '}
-                                            <span className="font-medium">{settlement.to.name}</span>
+                                            <span className="font-medium">{resolveName(settlement.to)}</span>
                                         </span>
-                                        <span className="text-sm font-semibold" style={{ color: 'var(--accent-indigo)' }}>
+                                        <span className="text-sm font-semibold" style={{ color: 'var(--accent-text)' }}>
                                             ${settlement.amount.toFixed(2)}
                                         </span>
                                     </div>
@@ -192,7 +199,8 @@ const ClosePeriodModal = ({
                     <button
                         onClick={handleClose}
                         disabled={isClosing}
-                        className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                        className="btn btn--primary"
+                        style={{ padding: '8px 18px', fontSize: 'var(--fs-sm)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                     >
                         {isClosing ? (
                             <>

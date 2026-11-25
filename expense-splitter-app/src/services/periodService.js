@@ -2,75 +2,37 @@ import { supabase } from '../supabase';
 
 // --- Settlement Period Operations ---
 
-/**
- * Create a new settlement period for a group
- * Automatically closes any active periods for the group
- */
-export const createPeriod = async (groupId, name = null, startDate = new Date()) => {
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
-
-        // Generate default name if not provided
-        const periodName = name || `Period ${new Date().toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-        })}`;
-
-        const { data, error } = await supabase
-            .from('settlement_periods')
-            .insert([
-                {
-                    group_id: groupId,
-                    name: periodName,
-                    start_date: startDate.toISOString(),
-                    status: 'active'
-                }
-            ])
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    } catch (error) {
-        console.error('Error creating period:', error);
-        throw error;
-    }
+export const closePeriod = async (groupId, periodId, name, activity) => {
+    const { data, error } = await supabase.rpc('esplit_close_period', {
+        p_group: groupId, p_period: periodId, p_name: name, p_activity: activity
+    });
+    if (error) throw error;
+    return data;
 };
 
-/**
- * Close the current active period
- * Saves final balances and settlements snapshot
- */
-export const closePeriod = async (periodId, finalBalances, finalSettlements, totalExpenses, transactionCount, name = null) => {
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
+export const editArchivedExpense = async (groupId, previous, changes) => {
+    const { data, error } = await supabase.rpc('esplit_edit_archived_expense', {
+        p_group: groupId, p_previous: previous, p_changes: changes
+    });
+    if (error) throw new Error(error.message);
+    return data;
+};
 
-        const { data, error } = await supabase
-            .from('settlement_periods')
-            .update({
-                status: 'closed',
-                end_date: new Date().toISOString(),
-                closed_at: new Date().toISOString(),
-                closed_by: user.id,
-                final_balances: finalBalances,
-                final_settlements: finalSettlements,
-                total_expenses: totalExpenses,
-                transaction_count: transactionCount,
-                ...(name ? { name } : {})
-            })
-            .eq('id', periodId)
-            .select()
-            .single();
+export const addArchivedExpense = async (groupId, periodId, expense) => {
+    const { data, error } = await supabase.rpc('esplit_add_archived_expense', {
+        p_group: groupId, p_period: periodId, p_expense: expense
+    });
+    if (error) throw new Error(error.message);
+    return data;
+};
 
-        if (error) throw error;
-        return data;
-    } catch (error) {
-        console.error('Error closing period:', error);
-        throw error;
-    }
+export const getArchivedExpenseEdits = async (periodId) => {
+    const { data, error } = await supabase.from('archived_expense_edits')
+        .select('id, expense_id, actor_name, edited_at, before_expense, after_expense')
+        .eq('period_id', periodId)
+        .order('edited_at', { ascending: false });
+    if (error) throw error;
+    return data;
 };
 
 /**
@@ -190,17 +152,7 @@ export const deletePeriod = async (periodId) => {
  * Called when user first accesses a group
  */
 export const ensureActivePeriod = async (groupId) => {
-    try {
-        const activePeriod = await getActivePeriod(groupId);
-
-        if (!activePeriod) {
-            // Create first period
-            return await createPeriod(groupId, 'Initial Period');
-        }
-
-        return activePeriod;
-    } catch (error) {
-        console.error('Error ensuring active period:', error);
-        throw error;
-    }
+    const { data, error } = await supabase.rpc('esplit_ensure_period', { p_group: groupId });
+    if (error) throw error;
+    return data;
 };

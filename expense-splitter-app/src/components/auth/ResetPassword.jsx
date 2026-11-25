@@ -138,11 +138,12 @@ const ResetPassword = () => {
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="resetpassword-password">New password</label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
                             <input
                                 type="password"
+                                id="resetpassword-password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -155,11 +156,12 @@ const ResetPassword = () => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirm password</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="resetpassword-confirmPassword">Confirm password</label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
                             <input
                                 type="password"
+                                id="resetpassword-confirmPassword"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"

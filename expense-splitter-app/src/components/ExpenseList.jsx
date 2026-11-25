@@ -476,7 +476,7 @@ const ExpenseList = ({
                                                     whileHover={{ scale: 1.08 }}
                                                     whileTap={{ scale: 0.92 }}
                                                     className="icon-btn ghost"
-                                                    onClick={(e) => { e.stopPropagation(); onEdit(expense); }}
+                                                    disabled={!onEdit} onClick={(e) => { e.stopPropagation(); onEdit(expense); }}
                                                     title="Edit expense"
                                                 >
                                                     <Edit2 size={15} />
@@ -486,7 +486,7 @@ const ExpenseList = ({
                                                 whileHover={{ scale: 1.08 }}
                                                 whileTap={{ scale: 0.92 }}
                                                 className={`icon-btn ghost ${isDeleting ? 'text-red-500' : ''}`}
-                                                onClick={(e) => { e.stopPropagation(); handleDelete(expense.id); }}
+                                                disabled={!onDelete} onClick={(e) => { e.stopPropagation(); handleDelete(expense.id); }}
                                                 title={isDeleting ? 'Click again to confirm' : 'Delete'}
                                             >
                                                 {isDeleting ? <AlertTriangle size={15} /> : <Trash2 size={15} />}

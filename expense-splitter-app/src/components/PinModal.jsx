@@ -118,7 +118,7 @@ const PinModal = ({ isOpen, onClose, onSubmit, mode = 'enter', groupName }) => {
                             </button>
                             <button
                                 type="submit"
-                                className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                                className="btn btn--primary flex-1 px-4 py-3 font-medium justify-center"
                             >
                                 {mode === 'set' ? 'Set PIN' : 'Unlock'}
                             </button>

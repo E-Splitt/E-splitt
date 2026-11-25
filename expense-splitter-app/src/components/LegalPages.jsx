@@ -6,12 +6,12 @@ const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL;
 const UPDATED = 'October 5, 2026';
 
 const Page = ({ title, children }) => (
-    <div className="min-h-screen px-4 py-10" style={{ background: 'var(--bg, #fff)', color: 'var(--text, #111)' }}>
-        <div className="max-w-2xl mx-auto">
+    <div className="legal-page">
+        <div className="legal-paper">
             <Link to="/" className="inline-flex items-center gap-2 text-sm mb-6 hover:opacity-75" style={{ color: 'var(--muted)' }}>
                 <ArrowLeft size={16} /> Back
             </Link>
-            <h1 className="text-3xl font-bold mb-1">{title}</h1>
+            <h1 className="legal-title">{title}</h1>
             <p className="text-sm mb-8" style={{ color: 'var(--muted)' }}>Last updated: {UPDATED}</p>
             <div className="space-y-6 leading-relaxed">{children}</div>
         </div>

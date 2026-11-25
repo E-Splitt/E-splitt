@@ -1,13 +1,31 @@
-import React, { useState } from 'react';
-import { X, Calendar, DollarSign, TrendingUp, Users, Download, ArrowLeft, Check } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { DollarSign, TrendingUp, Users, Download, ArrowLeft, Check, Pencil, Plus } from 'lucide-react';
 
-const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose }) => {
+import { getArchivedExpenseEdits } from '../services/periodService';
+
+const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose, onEditExpense, onAddExpense }) => {
     const [exported, setExported] = useState(false);
+
+    const [edits, setEdits] = useState(null);
+    const [historyError, setHistoryError] = useState(false);
+    const periodId = period?.id;
+    useEffect(() => {
+        if (!periodId) return;
+        let current = true;
+        getArchivedExpenseEdits(periodId).then(history => {
+            if (!current) return;
+            setEdits(history);
+            setHistoryError(false);
+        }).catch(() => {
+            if (current) setHistoryError(true);
+        });
+        return () => { current = false; };
+    }, [periodId, expenses]);
 
     if (!period) return null;
 
     const formatDate = (date) => {
-        return new Date(date).toLocaleDateString('en-US', {
+        return new Date(/^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00` : date).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric',
@@ -27,6 +45,22 @@ const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose }
     const getParticipantName = (userId) => {
         const participant = participants.find(p => p.id === userId);
         return participant?.name || userId;
+    };
+
+    const describeEdit = ({ before_expense: before, after_expense: after }) => {
+        const formatShares = shares => Object.entries(shares || {}).sort(([a], [b]) => a.localeCompare(b))
+            .map(([id, share]) => `${getParticipantName(id)} $${Number(share).toFixed(2)}`).join(', ');
+        const fields = [
+            ['Description', before.description, after.description],
+            ['Amount', `$${Number(before.amount).toFixed(2)}`, `$${Number(after.amount).toFixed(2)}`],
+            ['Paid by', getParticipantName(before.paidBy), getParticipantName(after.paidBy)],
+            ['Category', before.category || 'other', after.category || 'other'],
+            ['Split', formatShares(before.shares), formatShares(after.shares)],
+            ['Split method', before.splitMode || 'equal', after.splitMode || 'equal'],
+            ['Recurrence', before.isRecurring ? before.recurringInterval : 'None',
+                after.isRecurring ? after.recurringInterval : 'None']
+        ];
+        return fields.filter(([, oldValue, newValue]) => oldValue !== newValue);
     };
 
     const escapeCSV = (value) => {
@@ -101,7 +135,7 @@ const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose }
             lines.push(['Participant Name', 'Balance', 'Status'].join(','));
             Object.entries(period.final_balances).forEach(([userId, balance]) => {
                 const name = getParticipantName(userId);
-                const status = balance > 0.01 ? 'Is Owed Money' : balance < -0.01 ? 'Owes Money' : 'Settled Up';
+                const status = balance > 0 ? 'Is Owed Money' : balance < 0 ? 'Owes Money' : 'Settled Up';
                 lines.push([
                     escapeCSV(name),
                     `${balance > 0 ? '+' : ''}$${balance.toFixed(2)}`,
@@ -197,32 +231,32 @@ const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose }
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-lg p-6 shadow-lg">
-                        <div className="flex items-center gap-2 text-indigo-200 mb-2">
+                    <div className="archive-stat">
+                        <div className="flex items-center gap-2 stat-label mb-2">
                             <DollarSign size={20} />
                             <span className="text-sm font-medium">Total Expenses</span>
                         </div>
-                        <p className="text-3xl font-bold">
+                        <p className="text-3xl stat-value">
                             ${(period.total_expenses || 0).toFixed(2)}
                         </p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-lg p-6 shadow-lg">
-                        <div className="flex items-center gap-2 text-green-200 mb-2">
+                    <div className="archive-stat">
+                        <div className="flex items-center gap-2 stat-label mb-2">
                             <TrendingUp size={20} />
                             <span className="text-sm font-medium">Transactions</span>
                         </div>
-                        <p className="text-3xl font-bold">
+                        <p className="text-3xl stat-value">
                             {period.transaction_count || 0}
                         </p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-blue-500 to-cyan-600 text-white rounded-lg p-6 shadow-lg">
-                        <div className="flex items-center gap-2 text-blue-200 mb-2">
+                    <div className="archive-stat">
+                        <div className="flex items-center gap-2 stat-label mb-2">
                             <Users size={20} />
                             <span className="text-sm font-medium">Participants</span>
                         </div>
-                        <p className="text-3xl font-bold">
+                        <p className="text-3xl stat-value">
                             {period.final_balances ? Object.keys(period.final_balances).length : 0}
                         </p>
                     </div>
@@ -270,7 +304,14 @@ const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose }
 
                 {/* Expenses List */}
                 <div>
-                    <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>All Expenses</h2>
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                        <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>All Expenses</h2>
+                        {onAddExpense && (
+                            <button type="button" className="add-btn" onClick={onAddExpense}>
+                                <Plus size={16} aria-hidden="true" /> Add expense
+                            </button>
+                        )}
+                    </div>
                     {expenses.length === 0 ? (
                         <div className="text-center py-12 rounded-lg" style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}>
                             <p>No expenses recorded in this period</p>
@@ -283,12 +324,20 @@ const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose }
                                         <div>
                                             <h3 className="font-medium" style={{ color: 'var(--text-primary)' }}>{expense.description}</h3>
                                             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                                                Paid by {getParticipantName(expense.paidBy)} • {formatDate(expense.date)}
+                                                Paid by {getParticipantName(expense.paidBy)} • {formatDate(expense.expenseDate || expense.date)}
                                             </p>
                                         </div>
-                                        <span className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-                                            ${expense.amount.toFixed(2)}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                                ${expense.amount.toFixed(2)}
+                                            </span>
+                                            {!expense.isSettlement && onEditExpense && (
+                                                <button type="button" className="mini-btn flex items-center gap-1"
+                                                    aria-label={`Edit ${expense.description}`} onClick={() => onEditExpense(expense)}>
+                                                    <Pencil size={14} aria-hidden="true" /> Edit
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     {expense.shares && (
                                         <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -302,6 +351,28 @@ const PeriodDetailsView = ({ period, expenses = [], participants = [], onClose }
                         </div>
                     )}
                 </div>
+                <section className="mt-8">
+                    <h2 className="text-xl font-bold mb-4">Archive History</h2>
+                    {historyError && <p role="alert">Archive history could not be loaded.</p>}
+                    {!historyError && edits === null && <p>Loading edit history…</p>}
+                    {!historyError && edits?.length === 0 && <p>No archive changes recorded.</p>}
+                    {edits?.length > 0 && (
+                        <ul className="themed-card rounded-lg divide-y">
+                            {edits.map(edit => (
+                                <li key={edit.id} className="p-4">
+                                    <p className="font-medium">{edit.actor_name} {edit.before_expense ? 'edited' : 'added'} {
+                                        (edit.before_expense || edit.after_expense).description}</p>
+                                    <time className="text-sm" dateTime={edit.edited_at}>{new Date(edit.edited_at).toLocaleString()}</time>
+                                    <ul className="text-sm mt-1">
+                                        {edit.before_expense ? describeEdit(edit).map(([field, from, to]) => (
+                                            <li key={field}>{field} · {from} → {to}</li>
+                                        )) : <li>Amount ${edit.after_expense.amount.toFixed(2)}</li>}
+                                    </ul>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
             </div>
         </div>
     );
